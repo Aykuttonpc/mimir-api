@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Mimir.Api.Data;
 using Mimir.Api.Hubs;
+using Mimir.Api.Services.Email;
+using Mimir.Api.Services.Security;
 using Serilog;
 using StackExchange.Redis;
 
@@ -62,7 +64,16 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             }
         };
     });
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(opts =>
+{
+    opts.AddPolicy("Admin", p => p.RequireClaim("admin", "true"));
+});
+
+// ─────────────────────────── App Services ──────────────────────
+builder.Services.AddSingleton<TokenGenerator>();
+builder.Services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
+builder.Services.AddSingleton<IJwtService, JwtService>();
+builder.Services.AddSingleton<IEmailSender, ConsoleEmailSender>();
 
 // ─────────────────────────── SignalR ───────────────────────────
 builder.Services.AddSignalR();
@@ -87,13 +98,48 @@ builder.Services.AddHealthChecks()
 // ─────────────────────────── Pipeline ──────────────────────────
 var app = builder.Build();
 
-// ─────────────────────────── DB Migrate (startup) ───────────────
+// ─────────────────────────── DB Migrate + Bootstrap Admin Seed ──
 // MVP: startup migration. Tek-instance deploy'da OK.
 // TODO Sprint #2 sonu: init-container pattern'i ya da CI step'i değerlendir (race condition / multi-replica güvenliği).
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<MimirDbContext>();
+    var sp = scope.ServiceProvider;
+    var db = sp.GetRequiredService<MimirDbContext>();
     db.Database.Migrate();
+
+    // Admin:Bootstrap{Email,Password,Username} env'inde set ise + henüz hiç admin yoksa, oluştur.
+    var config = sp.GetRequiredService<IConfiguration>();
+    var bootEmail = config["Admin:BootstrapEmail"];
+    var bootPassword = config["Admin:BootstrapPassword"];
+    var bootUsername = config["Admin:BootstrapUsername"] ?? "admin";
+    var bootLogger = sp.GetRequiredService<ILoggerFactory>().CreateLogger("Bootstrap");
+
+    if (!string.IsNullOrWhiteSpace(bootEmail) && !string.IsNullOrWhiteSpace(bootPassword))
+    {
+        var hasAdmin = db.Users.Any(u => u.IsAdmin);
+        if (!hasAdmin)
+        {
+            var hasher = sp.GetRequiredService<Mimir.Api.Services.Security.IPasswordHasher>();
+            db.Users.Add(new Mimir.Api.Domain.User
+            {
+                Username = bootUsername,
+                Email = bootEmail.Trim().ToLowerInvariant(),
+                PasswordHash = hasher.Hash(bootPassword),
+                Status = Mimir.Api.Domain.UserStatus.Active,
+                IsAdmin = true,
+            });
+            db.SaveChanges();
+            bootLogger.LogInformation("✅ Bootstrap admin user oluşturuldu: {Email}", bootEmail);
+        }
+        else
+        {
+            bootLogger.LogInformation("Admin user mevcut → bootstrap seed atlandı.");
+        }
+    }
+    else
+    {
+        bootLogger.LogInformation("Admin:Bootstrap* config yok → bootstrap seed atlandı.");
+    }
 }
 
 app.UseForwardedHeaders();

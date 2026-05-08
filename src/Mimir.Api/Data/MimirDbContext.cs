@@ -11,6 +11,7 @@ public class MimirDbContext : DbContext
     public DbSet<Invitation> Invitations => Set<Invitation>();
     public DbSet<OtpCode> OtpCodes => Set<OtpCode>();
     public DbSet<AdminApproval> AdminApprovals => Set<AdminApproval>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -73,6 +74,22 @@ public class MimirDbContext : DbContext
 
             e.HasIndex(x => x.UserId);
             e.HasIndex(x => x.ApprovedByUserId);
+        });
+
+        mb.Entity<RefreshToken>(e =>
+        {
+            e.ToTable("refresh_tokens");
+            e.HasKey(x => x.Id);
+
+            e.Property(x => x.TokenHash).HasMaxLength(64).IsRequired();
+            e.Property(x => x.RevokedReason).HasMaxLength(50);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+
+            e.Ignore(x => x.IsActive);              // computed property — DB'de kolon değil
+
+            e.HasIndex(x => x.TokenHash).IsUnique();
+            e.HasIndex(x => x.UserId);
+            e.HasIndex(x => x.ExpiresAt);
         });
     }
 }

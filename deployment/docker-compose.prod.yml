@@ -60,6 +60,9 @@ services:
       Smtp__Port: ${SMTP_PORT}
       Smtp__User: ${SMTP_USER}
       Smtp__Password: ${SMTP_PASSWORD}
+      Admin__BootstrapEmail: ${ADMIN_BOOTSTRAP_EMAIL}
+      Admin__BootstrapPassword: ${ADMIN_BOOTSTRAP_PASSWORD}
+      Admin__BootstrapUsername: ${ADMIN_BOOTSTRAP_USERNAME}
     ports:
       - "127.0.0.1:9001:8080"               # Localhost smoke test ve fallback için bind kalsın
     mem_limit: 1g

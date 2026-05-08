@@ -36,39 +36,43 @@ services:
       timeout: 3s
       retries: 5
 
-  # web:
-  #   image: ghcr.io/aykuttonpc/mimir-api:${WEB_TAG}    # T-007: GHCR push sonrası uncomment et. WEB_TAG = semver veya commit SHA — 'latest' YASAK.
-  #   container_name: mimir-web
-  #   restart: unless-stopped
-  #   depends_on:
-  #     db:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #   environment:
-  #     ASPNETCORE_ENVIRONMENT: Production
-  #     ASPNETCORE_URLS: http://+:8080
-  #     ConnectionStrings__Default: "Host=db;Port=5432;Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}"
-  #     Redis__ConnectionString: "redis:6379,password=${REDIS_PASSWORD}"
-  #     Jwt__Key: ${JWT_KEY}
-  #     Jwt__Issuer: ${JWT_ISSUER}
-  #     Jwt__Audience: ${JWT_AUDIENCE}
-  #     Sms__Provider: ${SMS_PROVIDER}
-  #     Sms__ApiKey: ${SMS_API_KEY}
-  #     Smtp__Host: ${SMTP_HOST}
-  #     Smtp__Port: ${SMTP_PORT}
-  #     Smtp__User: ${SMTP_USER}
-  #     Smtp__Password: ${SMTP_PASSWORD}
-  #   ports:
-  #     - "127.0.0.1:9001:8080"     # Mevcut nginx 'location /mimir/' buraya proxy_pass eder
-  #   mem_limit: 1g
-  #   networks:
-  #     - mimir-net
-  #   healthcheck:
-  #     test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
-  #     interval: 30s
-  #     timeout: 5s
-  #     retries: 3
+  web:
+    image: mimir-api:${WEB_TAG}             # 'latest' YASAK — WEB_TAG = commit SHA / semver. .env.prod'da set.
+    container_name: mimir-web
+    restart: unless-stopped
+    build:
+      context: ./repo                        # VPS'te /opt/mimir/repo (git clone target)
+      dockerfile: Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}"
+      Redis__ConnectionString: "redis:6379,password=${REDIS_PASSWORD}"
+      Jwt__Key: ${JWT_KEY}
+      Jwt__Issuer: ${JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE}
+      Sms__Provider: ${SMS_PROVIDER}
+      Sms__ApiKey: ${SMS_API_KEY}
+      Smtp__Host: ${SMTP_HOST}
+      Smtp__Port: ${SMTP_PORT}
+      Smtp__User: ${SMTP_USER}
+      Smtp__Password: ${SMTP_PASSWORD}
+    ports:
+      - "127.0.0.1:9001:8080"               # Mevcut nginx 'location /mimir/' buraya proxy_pass eder
+    mem_limit: 1g
+    networks:
+      - mimir-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
 
 volumes:
   mimir-db-data:

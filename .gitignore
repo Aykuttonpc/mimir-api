@@ -1,0 +1,45 @@
+# Build output
+bin/
+obj/
+out/
+publish/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.pfx
+*.key
+*.pem
+appsettings.*.json
+!appsettings.json
+!appsettings.Development.json
+!appsettings.Production.template.json
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+
+# Test coverage
+coverage/
+*.coverage
+TestResults/
+
+# NuGet
+*.nupkg
+.nuget/
+packages/

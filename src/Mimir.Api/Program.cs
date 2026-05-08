@@ -119,6 +119,10 @@ builder.Services.Configure<ForwardedHeadersOptions>(opts =>
     opts.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
     opts.KnownNetworks.Clear();
     opts.KnownProxies.Clear();
+    // Docker default subnet'lerini trust et — nginx container bunlardan birinde
+    // Aksi halde X-Forwarded-For ignore edilir, rate limit nginx-IP-bazlı bucket olur (yanlış)
+    opts.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(System.Net.IPAddress.Parse("172.16.0.0"), 12));
+    opts.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(System.Net.IPAddress.Parse("10.0.0.0"), 8));
 });
 
 // ─────────────────────────── Health ────────────────────────────

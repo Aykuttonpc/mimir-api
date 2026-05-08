@@ -63,10 +63,11 @@ services:
       Smtp__User: ${SMTP_USER}
       Smtp__Password: ${SMTP_PASSWORD}
     ports:
-      - "127.0.0.1:9001:8080"               # Mevcut nginx 'location /mimir/' buraya proxy_pass eder
+      - "127.0.0.1:9001:8080"               # Localhost smoke test ve fallback için bind kalsın
     mem_limit: 1g
     networks:
-      - mimir-net
+      - mimir-net                             # Internal: db + redis ile konuşma
+      - aykutonpc_frontend                    # Shared: AykutOnPC nginx → mimir-web direct (host.docker.internal'e gerek yok)
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
       interval: 30s
@@ -81,3 +82,5 @@ volumes:
 networks:
   mimir-net:
     driver: bridge
+  aykutonpc_frontend:
+    external: true                            # AykutOnPC compose tarafından yönetiliyor; sadece üyeyiz

@@ -56,8 +56,6 @@ services:
       Jwt__Key: ${JWT_KEY}
       Jwt__Issuer: ${JWT_ISSUER}
       Jwt__Audience: ${JWT_AUDIENCE}
-      Sms__Provider: ${SMS_PROVIDER}
-      Sms__ApiKey: ${SMS_API_KEY}
       Smtp__Host: ${SMTP_HOST}
       Smtp__Port: ${SMTP_PORT}
       Smtp__User: ${SMTP_USER}

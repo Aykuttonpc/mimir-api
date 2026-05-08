@@ -1,14 +1,13 @@
 namespace Mimir.Api.Domain;
 
 /// <summary>
-/// 4-aşama onboarding gate (ARCHITECTURE.md "Yeni Kullanıcı Onboarding"):
-/// PendingEmail → PendingSms → PendingAdmin → Active.
+/// 3-aşama onboarding gate (ADR-010: SMS verify kaldırıldı):
+/// PendingEmail → PendingAdmin → Active.
 /// Admin manuel onayı sonrası Active.
 /// </summary>
 public enum UserStatus
 {
     PendingEmail,
-    PendingSms,
     PendingAdmin,
     Active,
     Suspended

@@ -23,7 +23,7 @@ public class MimirDbContext : DbContext
 
             e.Property(x => x.Username).HasMaxLength(50).IsRequired();
             e.Property(x => x.Email).HasMaxLength(254).IsRequired();
-            e.Property(x => x.Phone).HasMaxLength(20).IsRequired();
+            e.Property(x => x.Phone).HasMaxLength(20);                          // nullable, ADR-010
             e.Property(x => x.PasswordHash).HasMaxLength(255).IsRequired();
             e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20).IsRequired();
             e.Property(x => x.IsAdmin).HasDefaultValue(false);
@@ -31,6 +31,7 @@ public class MimirDbContext : DbContext
 
             e.HasIndex(x => x.Username).IsUnique();
             e.HasIndex(x => x.Email).IsUnique();
+            // Phone nullable: PostgreSQL multiple-NULL kabul eder, sadece dolu değerler unique olur.
             e.HasIndex(x => x.Phone).IsUnique();
         });
 
@@ -53,12 +54,11 @@ public class MimirDbContext : DbContext
             e.ToTable("otp_codes");
             e.HasKey(x => x.Id);
 
-            e.Property(x => x.Type).HasConversion<string>().HasMaxLength(10).IsRequired();
             e.Property(x => x.CodeHash).HasMaxLength(64).IsRequired();
             e.Property(x => x.AttemptCount).HasDefaultValue(0);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
 
-            e.HasIndex(x => new { x.UserId, x.Type });
+            e.HasIndex(x => x.UserId);
             e.HasIndex(x => x.ExpiresAt);          // expired temizliği için
         });
 

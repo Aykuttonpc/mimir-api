@@ -14,7 +14,7 @@ publish/
 # Environment / secrets
 .env
 .env.*
-!.env.example
+!*.example
 *.pfx
 *.key
 *.pem

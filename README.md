@@ -1,6 +1,6 @@
-# instaclone-api
+# mimir-api
 
-Backend API for InstaClone — kapalı, davet+admin onaylı kişisel iletişim ağı.
+Backend API for Mimir — kapalı, davet+admin onaylı kişisel iletişim ağı.
 
 ## Stack
 - ASP.NET Core 9 / C#
@@ -12,11 +12,11 @@ Backend API for InstaClone — kapalı, davet+admin onaylı kişisel iletişim a
 - Docker Compose deploy
 
 ## Hosting
-Hetzner CPX22 VPS (`/opt/instaclone`), mevcut nginx üzerinden `/insta/` path prefix ile servis.
+Hetzner CPX22 VPS (`/opt/mimir`), mevcut nginx üzerinden `/mimir/` path prefix ile servis.
 
 ## Repo
 - Backend: bu repo
-- Mobile: [JavaInstagramClone](https://github.com/Aykuttonpc/JavaInstagramClone) (Sprint #3'te `instaclone-mobile`'a rename edilecek)
+- Mobile: [JavaInstagramClone](https://github.com/Aykuttonpc/JavaInstagramClone) (Sprint #3'te `mimir-mobile`'a rename edilecek)
 
 ## Status
 **Sprint #2 — iskelet aşaması.** Henüz çalışan kod yok.

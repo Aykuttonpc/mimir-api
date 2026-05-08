@@ -1,11 +1,11 @@
-# InstaClone — Deployment
+# Mimir — Deployment
 
 VPS deploy artifact'ları. Pattern: VPS rehberi (`D:\AYKUTONPC-VPS-REHBERI.md`) "Strateji A".
 
 ## VPS Hedef
 
 - **Sunucu:** Hetzner CPX22, `178.104.198.249`, Ubuntu 24.04
-- **Yer:** `/opt/instaclone`
+- **Yer:** `/opt/mimir`
 - **SSH:** `ssh -i ~/.ssh/hetzner_aopc deploy@178.104.198.249`
 - **Mevcut komşu:** AykutOnPC (`/opt/aykutonpc`) — aynı VPS, ayrı klasör, ayrı container'lar
 
@@ -13,13 +13,13 @@ VPS deploy artifact'ları. Pattern: VPS rehberi (`D:\AYKUTONPC-VPS-REHBERI.md`) 
 
 | Container | Image | Port | Mem Limit | Not |
 |---|---|---|---|---|
-| `instaclone-db` | postgres:16-alpine | (yok, internal) | 512m | EF Core hedefi |
-| `instaclone-redis` | redis:7-alpine | (yok, internal) | 256m | requirepass + LRU 200m |
-| `instaclone-web` | ghcr.io/aykuttonpc/instaclone-api:${WEB_TAG} | `127.0.0.1:9001` | 1g | T-007 sonrası aktive |
+| `mimir-db` | postgres:16-alpine | (yok, internal) | 512m | EF Core hedefi |
+| `mimir-redis` | redis:7-alpine | (yok, internal) | 256m | requirepass + LRU 200m |
+| `mimir-web` | ghcr.io/aykuttonpc/mimir-api:${WEB_TAG} | `127.0.0.1:9001` | 1g | T-007 sonrası aktive |
 
 ## Routing
 
-Mevcut AykutOnPC nginx (port 80/443) `/insta/` path prefix ile bizim 9001'e proxy eder. Bkz `nginx/instaclone.conf` ve ADR-007.
+Mevcut AykutOnPC nginx (port 80/443) `/mimir/` path prefix ile bizim 9001'e proxy eder. Bkz `nginx/mimir.conf` ve ADR-007.
 
 ## İlk Deploy Adımları (T-006 + T-008)
 
@@ -28,12 +28,12 @@ Mevcut AykutOnPC nginx (port 80/443) `/insta/` path prefix ile bizim 9001'e prox
 ssh -i ~/.ssh/hetzner_aopc deploy@178.104.198.249
 
 # 2) Klasörü hazırla
-sudo mkdir -p /opt/instaclone && sudo chown deploy:deploy /opt/instaclone
-cd /opt/instaclone
+sudo mkdir -p /opt/mimir && sudo chown deploy:deploy /opt/mimir
+cd /opt/mimir
 
 # 3) Local'den dosyaları çek (kullanıcı makinesinden)
-#    scp deployment/docker-compose.prod.yml deploy@178.104.198.249:/opt/instaclone/
-#    scp deployment/.env.prod.example       deploy@178.104.198.249:/opt/instaclone/
+#    scp deployment/docker-compose.prod.yml deploy@178.104.198.249:/opt/mimir/
+#    scp deployment/.env.prod.example       deploy@178.104.198.249:/opt/mimir/
 
 # 4) .env.prod oluştur (random secret'larla doldur)
 cp .env.prod.example .env.prod
@@ -46,8 +46,8 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d db redis
 
 # 6) Healthcheck doğrula
 docker compose -f docker-compose.prod.yml ps
-docker exec instaclone-db pg_isready -U instaclone
-docker exec instaclone-redis redis-cli -a "$REDIS_PASSWORD" ping
+docker exec mimir-db pg_isready -U mimir
+docker exec mimir-redis redis-cli -a "$REDIS_PASSWORD" ping
 ```
 
 ## ⚠️ ASLA YAPMA

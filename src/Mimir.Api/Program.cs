@@ -179,6 +179,9 @@ using (var scope = app.Services.CreateScope())
 
 app.UseForwardedHeaders();
 app.UseSerilogRequestLogging();
+
+// UseRouting ÖNCE — UseRateLimiter endpoint metadata (policy attribute) okumak için bunu ister
+app.UseRouting();
 app.UseRateLimiter();
 
 if (app.Environment.IsDevelopment())

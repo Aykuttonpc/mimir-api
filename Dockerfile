@@ -23,8 +23,10 @@ WORKDIR /app
 # wget — healthcheck için
 RUN apk add --no-cache wget
 
-# Non-root user
-RUN addgroup -S mimir && adduser -S mimir -G mimir
+# Non-root user + DataProtection-Keys dizini (volume mount altında permission denied'i önler)
+RUN addgroup -S mimir && adduser -S mimir -G mimir \
+    && mkdir -p /home/mimir/.aspnet/DataProtection-Keys \
+    && chown -R mimir:mimir /home/mimir/.aspnet
 USER mimir
 
 COPY --from=build --chown=mimir:mimir /app/publish .

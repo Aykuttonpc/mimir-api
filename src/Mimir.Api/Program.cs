@@ -180,10 +180,6 @@ using (var scope = app.Services.CreateScope())
 app.UseForwardedHeaders();
 app.UseSerilogRequestLogging();
 
-// UseRouting ÖNCE — UseRateLimiter endpoint metadata (policy attribute) okumak için bunu ister
-app.UseRouting();
-app.UseRateLimiter();
-
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -191,6 +187,9 @@ if (app.Environment.IsDevelopment())
 
 app.UseAuthentication();
 app.UseAuthorization();
+// WebApplication, MapXxx'ten önce UseRouting'i otomatik ekler. UseRateLimiter Auth/AuthZ sonrası
+// + Map* öncesi: route data hazır, rate limit policy attribute'ı okunabiliyor.
+app.UseRateLimiter();
 
 app.MapControllers();
 app.MapHub<DmHub>("/hubs/dm").RequireAuthorization();

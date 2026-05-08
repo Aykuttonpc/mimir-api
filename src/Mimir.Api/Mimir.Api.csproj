@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Mimir.Api</RootNamespace>
+    <AssemblyName>Mimir.Api</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <UserSecretsId>mimir-api-dev</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ASP.NET Core / OpenAPI -->
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.0" />
+
+    <!-- EF Core + Postgres -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0" PrivateAssets="all" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.2" />
+
+    <!-- Auth -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.0" />
+
+    <!-- Redis -->
+    <PackageReference Include="StackExchange.Redis" Version="2.8.16" />
+
+    <!-- Logging -->
+    <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+
+    <!-- Health checks -->
+    <PackageReference Include="AspNetCore.HealthChecks.NpgSql" Version="9.0.0" />
+    <PackageReference Include="AspNetCore.HealthChecks.Redis" Version="9.0.0" />
+  </ItemGroup>
+
+</Project>

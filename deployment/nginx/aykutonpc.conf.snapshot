@@ -77,6 +77,8 @@ server {
     # ── Mimir API (path prefix routing — ADR-007) ───────────
     # Mobile-only baseUrl: https://aykutonpc.com/mimir/
     # Container: mimir-web:8080 (aykutonpc_frontend network'e join'lendi)
+    # NOT: AykutOnPC repo'su deploy script `git reset --hard` yaparsa bu blok silinir.
+    # Kalıcı çözüm: AykutOnPC repo'sunda aykutonpc.conf'a commit at.
     location /mimir/ {
         # Path strip: /mimir/api/x → /api/x (trailing slash kritik)
         proxy_pass http://mimir-web:8080/;

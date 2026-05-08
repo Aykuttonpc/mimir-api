@@ -36,7 +36,7 @@ services:
       timeout: 3s
       retries: 5
 
-  web:
+  api:                                       # Service name 'api' (eski 'web') — AykutOnPC stack'i de 'web' service kullanıyor, alias çakışmasından kaçın
     image: mimir-api:${WEB_TAG}             # 'latest' YASAK — WEB_TAG = commit SHA / semver. .env.prod'da set.
     container_name: mimir-web
     restart: unless-stopped
@@ -69,11 +69,10 @@ services:
       - mimir-dp-keys:/home/mimir/.aspnet/DataProtection-Keys   # ASP.NET Core data protection key persistence (container restart sonrası key kaybolmasın)
     mem_limit: 1g
     networks:
-      mimir-net: {}                           # Internal: db + redis ile konuşma (default 'web' alias OK)
+      mimir-net: {}                           # Internal: db + redis ile konuşma (alias 'api')
       aykutonpc_frontend:
-        # KRITIK: default service-name alias 'web' DEVRE DIŞI — AykutOnPC'nin 'aykutonpc-web' container'i
-        # da 'web' aliasıyla aynı network'te. DNS çakışması AykutOnPC trafiğini yanlış proxy ediyor.
-        # Sadece 'mimir-web' alias verilir; nginx config 'proxy_pass http://mimir-web:8080/' bunu kullanır.
+        # Default alias 'api' AykutOnPC'nin 'web' alias'ı ile çakışmıyor.
+        # Nginx config 'proxy_pass http://mimir-web:8080/' container_name kullandığı için 'api' alias'ı önemli değil.
         aliases:
           - mimir-web
     healthcheck:

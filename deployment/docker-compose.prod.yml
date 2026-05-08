@@ -65,6 +65,8 @@ services:
       Admin__BootstrapUsername: ${ADMIN_BOOTSTRAP_USERNAME}
     ports:
       - "127.0.0.1:9001:8080"               # Localhost smoke test ve fallback için bind kalsın
+    volumes:
+      - mimir-dp-keys:/home/mimir/.aspnet/DataProtection-Keys   # ASP.NET Core data protection key persistence (container restart sonrası key kaybolmasın)
     mem_limit: 1g
     networks:
       - mimir-net                             # Internal: db + redis ile konuşma
@@ -79,6 +81,7 @@ services:
 volumes:
   mimir-db-data:
   mimir-redis-data:
+  mimir-dp-keys:
 
 networks:
   mimir-net:

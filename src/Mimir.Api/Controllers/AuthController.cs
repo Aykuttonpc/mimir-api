@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Mimir.Api.Contracts;
 using Mimir.Api.Data;
@@ -40,6 +41,7 @@ public class AuthController : ControllerBase
 
     // POST /api/auth/register
     [HttpPost("register")]
+    [EnableRateLimiting("auth-register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest req, CancellationToken ct)
     {
         var inviteHash = _tokens.Sha256Hex(req.InvitationToken);
@@ -93,6 +95,7 @@ public class AuthController : ControllerBase
 
     // GET /api/auth/verify-email?token=...
     [HttpGet("verify-email")]
+    [EnableRateLimiting("auth-verify")]
     public async Task<IActionResult> VerifyEmail([FromQuery] string token, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(token))
@@ -119,6 +122,7 @@ public class AuthController : ControllerBase
 
     // POST /api/auth/login
     [HttpPost("login")]
+    [EnableRateLimiting("auth-login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest req, CancellationToken ct)
     {
         var input = req.UsernameOrEmail.Trim();

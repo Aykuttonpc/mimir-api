@@ -1,6 +1,8 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Mimir.Api.Data;
@@ -73,7 +75,36 @@ builder.Services.AddAuthorization(opts =>
 builder.Services.AddSingleton<TokenGenerator>();
 builder.Services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
 builder.Services.AddSingleton<IJwtService, JwtService>();
-builder.Services.AddSingleton<IEmailSender, ConsoleEmailSender>();
+
+// Email: Smtp:Host varsa gerçek SMTP, yoksa console fallback (mock)
+var smtpHost = builder.Configuration["Smtp:Host"];
+if (!string.IsNullOrWhiteSpace(smtpHost))
+    builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
+else
+    builder.Services.AddSingleton<IEmailSender, ConsoleEmailSender>();
+
+// ─────────────────────────── Rate Limit (T-014) ─────────────────
+// IP-based fixed window. Single-instance MVP'de yeterli; multi-replica olduğunda Redis-distributed'a taşınır.
+builder.Services.AddRateLimiter(opts =>
+{
+    opts.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    static RateLimitPartition<string> ByIp(HttpContext ctx, int permits, TimeSpan window)
+    {
+        var key = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = permits,
+            Window = window,
+            QueueLimit = 0,
+        });
+    }
+
+    opts.AddPolicy("auth-register", ctx => ByIp(ctx, 5, TimeSpan.FromMinutes(1)));
+    opts.AddPolicy("auth-login",    ctx => ByIp(ctx, 10, TimeSpan.FromMinutes(1)));
+    opts.AddPolicy("auth-verify",   ctx => ByIp(ctx, 30, TimeSpan.FromMinutes(1)));
+    opts.AddPolicy("admin-invite",  ctx => ByIp(ctx, 20, TimeSpan.FromMinutes(1)));
+});
 
 // ─────────────────────────── SignalR ───────────────────────────
 builder.Services.AddSignalR();
@@ -144,6 +175,7 @@ using (var scope = app.Services.CreateScope())
 
 app.UseForwardedHeaders();
 app.UseSerilogRequestLogging();
+app.UseRateLimiter();
 
 if (app.Environment.IsDevelopment())
 {

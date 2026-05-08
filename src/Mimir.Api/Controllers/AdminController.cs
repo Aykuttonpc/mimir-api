@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Mimir.Api.Contracts;
 using Mimir.Api.Data;
@@ -30,6 +31,7 @@ public class AdminController : ControllerBase
 
     // POST /api/admin/invitations
     [HttpPost("invitations")]
+    [EnableRateLimiting("admin-invite")]
     public async Task<IActionResult> CreateInvitation([FromBody] InvitationCreateRequest req, CancellationToken ct)
     {
         var token = _tokens.GenerateUrlSafeToken(32);

@@ -35,6 +35,9 @@
 
     <!-- Password hashing (T-009) -->
     <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+
+    <!-- SMTP (gerçek email — Sprint #2 sonu) -->
+    <PackageReference Include="MailKit" Version="4.16.0" />
   </ItemGroup>
 
 </Project>

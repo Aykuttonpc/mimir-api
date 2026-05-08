@@ -87,6 +87,15 @@ builder.Services.AddHealthChecks()
 // ─────────────────────────── Pipeline ──────────────────────────
 var app = builder.Build();
 
+// ─────────────────────────── DB Migrate (startup) ───────────────
+// MVP: startup migration. Tek-instance deploy'da OK.
+// TODO Sprint #2 sonu: init-container pattern'i ya da CI step'i değerlendir (race condition / multi-replica güvenliği).
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<MimirDbContext>();
+    db.Database.Migrate();
+}
+
 app.UseForwardedHeaders();
 app.UseSerilogRequestLogging();
 

@@ -29,6 +29,60 @@ public class AdminController : ControllerBase
             ? id
             : throw new InvalidOperationException("user_id_missing");
 
+    // GET /api/admin/invitations — T-040: davet listesi (token plain dönmez)
+    [HttpGet("invitations")]
+    public async Task<IActionResult> ListInvitations(CancellationToken ct)
+    {
+        var invs = await _db.Invitations
+            .AsNoTracking()
+            .OrderByDescending(i => i.CreatedAt)
+            .Take(200)
+            .ToListAsync(ct);
+
+        var redeemerIds = invs
+            .Where(i => i.RedeemedByUserId != null)
+            .Select(i => i.RedeemedByUserId!.Value)
+            .Distinct()
+            .ToList();
+
+        var redeemers = await _db.Users
+            .AsNoTracking()
+            .Where(u => redeemerIds.Contains(u.Id))
+            .Select(u => new { u.Id, u.Username })
+            .ToDictionaryAsync(u => u.Id, u => u.Username, ct);
+
+        var now = DateTime.UtcNow;
+        var dtos = invs.Select(i => new InvitationSummaryDto(
+            Id: i.Id,
+            Note: i.Note,
+            CreatedAt: i.CreatedAt,
+            ExpiresAt: i.ExpiresAt,
+            RedeemedAt: i.RedeemedAt,
+            RedeemedByUsername: i.RedeemedByUserId.HasValue
+                ? redeemers.GetValueOrDefault(i.RedeemedByUserId.Value)
+                : null,
+            Status: i.RedeemedAt.HasValue ? "Used"
+                : i.ExpiresAt <= now ? "Expired"
+                : "Active"
+        )).ToList();
+
+        return Ok(dtos);
+    }
+
+    // DELETE /api/admin/invitations/{id} — T-040: revoke (ExpiresAt'i şimdiye çek)
+    [HttpDelete("invitations/{id:guid}")]
+    public async Task<IActionResult> RevokeInvitation(Guid id, CancellationToken ct)
+    {
+        var inv = await _db.Invitations.FirstOrDefaultAsync(i => i.Id == id, ct);
+        if (inv is null) return NotFound();
+        if (inv.RedeemedAt.HasValue) return BadRequest(new { error = "already_redeemed" });
+        if (inv.ExpiresAt <= DateTime.UtcNow) return BadRequest(new { error = "already_expired" });
+
+        inv.ExpiresAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
     // POST /api/admin/invitations
     [HttpPost("invitations")]
     [EnableRateLimiting("admin-invite")]

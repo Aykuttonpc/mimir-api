@@ -29,3 +29,8 @@ public record AuthResponse(
 public record RefreshRequest([Required] string RefreshToken);
 
 public record VerifyEmailResponse(string Status, string Message);
+
+public record ChangePasswordRequest(
+    [Required] string CurrentPassword,
+    [Required, StringLength(72, MinimumLength = 8)] string NewPassword
+);

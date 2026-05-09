@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -184,6 +186,43 @@ public class AuthController : ControllerBase
         await _db.SaveChangesAsync(ct);
 
         return Ok(auth.Response);
+    }
+
+    // POST /api/auth/change-password — JWT-authenticated user, T-024
+    [HttpPost("change-password")]
+    [Authorize]
+    [EnableRateLimiting("auth-change-password")]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest req, CancellationToken ct)
+    {
+        var sub = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        if (!Guid.TryParse(sub, out var userId))
+            return Unauthorized();
+
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
+        if (user is null) return Unauthorized();
+
+        if (!_hasher.Verify(req.CurrentPassword, user.PasswordHash))
+            return BadRequest(new { error = "current_password_incorrect" });
+
+        if (req.NewPassword == req.CurrentPassword)
+            return BadRequest(new { error = "new_password_same_as_current" });
+
+        user.PasswordHash = _hasher.Hash(req.NewPassword);
+        user.UpdatedAt = DateTime.UtcNow;
+
+        // Diğer cihazlardaki session'ları sonlandır — yeni şifreyle yeniden login zorunlu
+        var active = await _db.RefreshTokens
+            .Where(r => r.UserId == userId && r.RevokedAt == null)
+            .ToListAsync(ct);
+        foreach (var t in active)
+        {
+            t.RevokedAt = DateTime.UtcNow;
+            t.RevokedReason = "password_changed";
+        }
+
+        await _db.SaveChangesAsync(ct);
+        _logger.LogInformation("Password changed for user {UserId} ({Username})", userId, user.Username);
+        return NoContent();
     }
 
     // POST /api/auth/logout

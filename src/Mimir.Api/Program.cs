@@ -100,10 +100,11 @@ builder.Services.AddRateLimiter(opts =>
         });
     }
 
-    opts.AddPolicy("auth-register", ctx => ByIp(ctx, 5, TimeSpan.FromMinutes(1)));
-    opts.AddPolicy("auth-login",    ctx => ByIp(ctx, 10, TimeSpan.FromMinutes(1)));
-    opts.AddPolicy("auth-verify",   ctx => ByIp(ctx, 30, TimeSpan.FromMinutes(1)));
-    opts.AddPolicy("admin-invite",  ctx => ByIp(ctx, 20, TimeSpan.FromMinutes(1)));
+    opts.AddPolicy("auth-register",        ctx => ByIp(ctx, 5,  TimeSpan.FromMinutes(1)));
+    opts.AddPolicy("auth-login",           ctx => ByIp(ctx, 10, TimeSpan.FromMinutes(1)));
+    opts.AddPolicy("auth-verify",          ctx => ByIp(ctx, 30, TimeSpan.FromMinutes(1)));
+    opts.AddPolicy("auth-change-password", ctx => ByIp(ctx, 5,  TimeSpan.FromMinutes(1)));
+    opts.AddPolicy("admin-invite",         ctx => ByIp(ctx, 20, TimeSpan.FromMinutes(1)));
 });
 
 // ─────────────────────────── SignalR ───────────────────────────

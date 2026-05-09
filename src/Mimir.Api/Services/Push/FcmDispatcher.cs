@@ -52,6 +52,13 @@ public class FcmDispatcher : IPushDispatcher
 
         if (tokens.Count == 0) return;
 
+        // ADR-017: senderUsername payload'a — bildirim hızlı title gösterir.
+        // Mesaj İÇERİĞİ payload'a girmez; mobile uyandıktan sonra API'den çeker.
+        var senderUsername = await db.Users
+            .Where(u => u.Id == senderUserId)
+            .Select(u => u.Username)
+            .FirstOrDefaultAsync(ct) ?? "";
+
         var msg = new MulticastMessage
         {
             Tokens = tokens,
@@ -59,6 +66,7 @@ public class FcmDispatcher : IPushDispatcher
             {
                 ["type"] = "newMessage",
                 ["senderUserId"] = senderUserId.ToString(),
+                ["senderUsername"] = senderUsername,
             },
             Android = new AndroidConfig
             {

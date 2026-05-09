@@ -12,6 +12,7 @@ public class MimirDbContext : DbContext
     public DbSet<OtpCode> OtpCodes => Set<OtpCode>();
     public DbSet<AdminApproval> AdminApprovals => Set<AdminApproval>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<Message> Messages => Set<Message>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -90,6 +91,24 @@ public class MimirDbContext : DbContext
             e.HasIndex(x => x.TokenHash).IsUnique();
             e.HasIndex(x => x.UserId);
             e.HasIndex(x => x.ExpiresAt);
+        });
+
+        mb.Entity<Message>(e =>
+        {
+            e.ToTable("messages");
+            e.HasKey(x => x.Id);
+
+            e.Property(x => x.Iv).IsRequired();
+            e.Property(x => x.Ciphertext).IsRequired();
+            e.Property(x => x.Tag).IsRequired();
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+
+            // Conversation listing — sender görünüm
+            e.HasIndex(x => new { x.SenderId, x.RecipientId, x.CreatedAt });
+            // Recipient görünüm + unread query
+            e.HasIndex(x => new { x.RecipientId, x.SenderId, x.CreatedAt });
+            // Unread count query
+            e.HasIndex(x => new { x.RecipientId, x.ReadAt });
         });
     }
 }

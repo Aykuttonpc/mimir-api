@@ -63,6 +63,7 @@ services:
       Admin__BootstrapEmail: ${ADMIN_BOOTSTRAP_EMAIL}
       Admin__BootstrapPassword: ${ADMIN_BOOTSTRAP_PASSWORD}
       Admin__BootstrapUsername: ${ADMIN_BOOTSTRAP_USERNAME}
+      Crypto__MessageKey: ${CRYPTO_MESSAGE_KEY}
     ports:
       - "127.0.0.1:9001:8080"               # Localhost smoke test ve fallback için bind kalsın
     volumes:

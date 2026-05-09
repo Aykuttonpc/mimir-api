@@ -83,6 +83,9 @@ if (!string.IsNullOrWhiteSpace(smtpHost))
 else
     builder.Services.AddSingleton<IEmailSender, ConsoleEmailSender>();
 
+// Message crypto (DM at-rest, ADR-012)
+builder.Services.AddSingleton<IMessageCrypto, AesGcmMessageCrypto>();
+
 // ─────────────────────────── Rate Limit (T-014) ─────────────────
 // IP-based fixed window. Single-instance MVP'de yeterli; multi-replica olduğunda Redis-distributed'a taşınır.
 builder.Services.AddRateLimiter(opts =>

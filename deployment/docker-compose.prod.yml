@@ -64,6 +64,9 @@ services:
       Admin__BootstrapPassword: ${ADMIN_BOOTSTRAP_PASSWORD}
       Admin__BootstrapUsername: ${ADMIN_BOOTSTRAP_USERNAME}
       Crypto__MessageKey: ${CRYPTO_MESSAGE_KEY}
+      MinAppVersion__Android: ${MIN_APP_VERSION_ANDROID:-0.1.0}
+      LatestAppVersion__Android: ${LATEST_APP_VERSION_ANDROID:-0.1.0}
+      AppDownloadUrl__Android: ${APP_DOWNLOAD_URL_ANDROID:-}
     ports:
       - "127.0.0.1:9001:8080"               # Localhost smoke test ve fallback için bind kalsın
     volumes:

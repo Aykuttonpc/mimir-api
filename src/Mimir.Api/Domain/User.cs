@@ -10,6 +10,8 @@ public class User
     public string PasswordHash { get; set; } = null!;
     public UserStatus Status { get; set; } = UserStatus.PendingEmail;
     public bool IsAdmin { get; set; }
+    /// <summary> ADR-016: 12 char URL-safe paylaşılan key. Karşı taraf bu key ile arkadaşlık isteği gönderir. </summary>
+    public string? FriendKey { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }
 }

@@ -87,6 +87,9 @@ else
 // Message crypto (DM at-rest, ADR-012)
 builder.Services.AddSingleton<IMessageCrypto, AesGcmMessageCrypto>();
 
+// Friendship gating (ADR-016)
+builder.Services.AddScoped<IFriendshipChecker, FriendshipChecker>();
+
 // ─────────────────────────── Rate Limit (T-014) ─────────────────
 // IP-based fixed window. Single-instance MVP'de yeterli; multi-replica olduğunda Redis-distributed'a taşınır.
 builder.Services.AddRateLimiter(opts =>
@@ -109,6 +112,7 @@ builder.Services.AddRateLimiter(opts =>
     opts.AddPolicy("auth-verify",          ctx => ByIp(ctx, 30, TimeSpan.FromMinutes(1)));
     opts.AddPolicy("auth-change-password", ctx => ByIp(ctx, 5,  TimeSpan.FromMinutes(1)));
     opts.AddPolicy("admin-invite",         ctx => ByIp(ctx, 20, TimeSpan.FromMinutes(1)));
+    opts.AddPolicy("friend-request",       ctx => ByIp(ctx, 5,  TimeSpan.FromMinutes(1)));
 });
 
 // ─────────────────────────── SignalR ───────────────────────────
@@ -179,6 +183,64 @@ using (var scope = app.Services.CreateScope())
     else
     {
         bootLogger.LogInformation("Admin:Bootstrap* config yok → bootstrap seed atlandı.");
+    }
+
+    // ADR-016 seed: FriendKey eksik kullanıcılara üret + mevcut DM çiftlerini Auto-Accepted friendship
+    var tokens = sp.GetRequiredService<Mimir.Api.Services.Security.TokenGenerator>();
+
+    // 1. FriendKey eksik olanlara üret
+    var usersWithoutKey = db.Users.Where(u => u.FriendKey == null).ToList();
+    foreach (var u in usersWithoutKey)
+    {
+        for (int i = 0; i < 5; i++)
+        {
+            var k = tokens.GenerateUrlSafeToken(byteSize: 9);
+            if (!db.Users.Any(x => x.FriendKey == k))
+            {
+                u.FriendKey = k;
+                break;
+            }
+        }
+    }
+    if (usersWithoutKey.Count > 0)
+    {
+        db.SaveChanges();
+        bootLogger.LogInformation("FriendKey üretildi: {Count} kullanıcı", usersWithoutKey.Count);
+    }
+
+    // 2. Mevcut DM çiftlerini Auto-Accepted friendship'e taşı
+    var msgPairs = db.Messages
+        .Where(m => m.DeletedAt == null)
+        .Select(m => new { m.SenderId, m.RecipientId })
+        .ToList()
+        .Select(p => p.SenderId.CompareTo(p.RecipientId) < 0
+            ? (Lo: p.SenderId, Hi: p.RecipientId)
+            : (Lo: p.RecipientId, Hi: p.SenderId))
+        .Distinct()
+        .ToList();
+
+    int autoAccepted = 0;
+    foreach (var p in msgPairs)
+    {
+        var exists = db.Friendships.Any(f =>
+            (f.RequesterId == p.Lo && f.AddresseeId == p.Hi) ||
+            (f.RequesterId == p.Hi && f.AddresseeId == p.Lo));
+        if (!exists)
+        {
+            db.Friendships.Add(new Mimir.Api.Domain.Friendship
+            {
+                RequesterId = p.Lo,
+                AddresseeId = p.Hi,
+                Status = Mimir.Api.Domain.FriendshipStatus.Accepted,
+                RespondedAt = DateTime.UtcNow,
+            });
+            autoAccepted++;
+        }
+    }
+    if (autoAccepted > 0)
+    {
+        db.SaveChanges();
+        bootLogger.LogInformation("Auto-Accepted friendship: {Count} çift (mevcut DM verisi)", autoAccepted);
     }
 }
 

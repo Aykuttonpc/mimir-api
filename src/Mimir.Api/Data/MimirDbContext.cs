@@ -13,6 +13,7 @@ public class MimirDbContext : DbContext
     public DbSet<AdminApproval> AdminApprovals => Set<AdminApproval>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Message> Messages => Set<Message>();
+    public DbSet<Friendship> Friendships => Set<Friendship>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -30,11 +31,13 @@ public class MimirDbContext : DbContext
             e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20).IsRequired();
             e.Property(x => x.IsAdmin).HasDefaultValue(false);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+            e.Property(x => x.FriendKey).HasMaxLength(20);
 
             e.HasIndex(x => x.Username).IsUnique();
             e.HasIndex(x => x.Email).IsUnique();
             // Phone nullable: PostgreSQL multiple-NULL kabul eder, sadece dolu değerler unique olur.
             e.HasIndex(x => x.Phone).IsUnique();
+            e.HasIndex(x => x.FriendKey).IsUnique();
         });
 
         mb.Entity<Invitation>(e =>
@@ -109,6 +112,19 @@ public class MimirDbContext : DbContext
             e.HasIndex(x => new { x.RecipientId, x.SenderId, x.CreatedAt });
             // Unread count query
             e.HasIndex(x => new { x.RecipientId, x.ReadAt });
+        });
+
+        mb.Entity<Friendship>(e =>
+        {
+            e.ToTable("friendships");
+            e.HasKey(x => x.Id);
+
+            e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20).IsRequired();
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+
+            e.HasIndex(x => new { x.RequesterId, x.AddresseeId });
+            e.HasIndex(x => new { x.AddresseeId, x.RequesterId });
+            e.HasIndex(x => x.Status);
         });
     }
 }

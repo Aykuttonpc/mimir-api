@@ -23,34 +23,14 @@ public class UsersController : ControllerBase
             : throw new InvalidOperationException("user_id_missing");
 
     /// <summary>
-    /// DM için seçilebilir kullanıcılar — Active olan, current user dışındaki herkes (ADR-013).
-    /// Username/email substring search ile filtre.
+    /// ADR-016: tüm Active kullanıcı listesi PRIVACY ihlali — kaldırıldı.
+    /// Yeni model: kullanıcılar friend key paylaşımı + onay-bazlı eklenir (FriendsController).
     /// </summary>
     [HttpGet("active")]
-    public async Task<IActionResult> ActiveUsers(
-        [FromQuery] string? search,
-        [FromQuery] int limit = 50,
-        CancellationToken ct = default)
-    {
-        var me = CurrentUserId;
-        var q = _db.Users
-            .AsNoTracking()
-            .Where(u => u.Status == UserStatus.Active && u.Id != me);
-
-        if (!string.IsNullOrWhiteSpace(search))
+    public IActionResult ActiveUsers() =>
+        StatusCode(StatusCodes.Status410Gone, new
         {
-            var s = search.Trim().ToLower();
-            q = q.Where(u =>
-                EF.Functions.Like(u.Username.ToLower(), $"%{s}%") ||
-                EF.Functions.Like(u.Email.ToLower(), $"%{s}%"));
-        }
-
-        var users = await q
-            .OrderBy(u => u.Username)
-            .Take(Math.Clamp(limit, 1, 200))
-            .Select(u => new ActiveUserDto(u.Id, u.Username))
-            .ToListAsync(ct);
-
-        return Ok(users);
-    }
+            error = "endpoint_removed_adr_016",
+            message = "Tüm aktif kullanıcılar listesi privacy gereği kaldırıldı. Friend key ile arkadaş ekle: POST /api/friends/requests"
+        });
 }

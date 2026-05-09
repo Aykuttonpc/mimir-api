@@ -19,12 +19,14 @@ public class DmHub : Hub
 {
     private readonly MimirDbContext _db;
     private readonly IMessageCrypto _crypto;
+    private readonly IFriendshipChecker _friends;
     private readonly ILogger<DmHub> _logger;
 
-    public DmHub(MimirDbContext db, IMessageCrypto crypto, ILogger<DmHub> logger)
+    public DmHub(MimirDbContext db, IMessageCrypto crypto, IFriendshipChecker friends, ILogger<DmHub> logger)
     {
         _db = db;
         _crypto = crypto;
+        _friends = friends;
         _logger = logger;
     }
 
@@ -68,6 +70,10 @@ public class DmHub : Hub
             .FirstOrDefaultAsync(u => u.Id == toUserId && u.Status == UserStatus.Active);
         if (recipient is null)
             throw new HubException("recipient_not_found_or_inactive");
+
+        // ADR-016: arkadaş kontrolü
+        if (!await _friends.AreAcceptedAsync(me, toUserId))
+            throw new HubException("not_friends");
 
         var cipher = _crypto.Encrypt(plaintext);
         var msg = new Message

@@ -19,17 +19,20 @@ public class MessagesController : ControllerBase
     private readonly MimirDbContext _db;
     private readonly IMessageCrypto _crypto;
     private readonly IHubContext<DmHub> _hub;
+    private readonly IFriendshipChecker _friends;
     private readonly ILogger<MessagesController> _logger;
 
     public MessagesController(
         MimirDbContext db,
         IMessageCrypto crypto,
         IHubContext<DmHub> hub,
+        IFriendshipChecker friends,
         ILogger<MessagesController> logger)
     {
         _db = db;
         _crypto = crypto;
         _hub = hub;
+        _friends = friends;
         _logger = logger;
     }
 
@@ -38,22 +41,34 @@ public class MessagesController : ControllerBase
             ? id
             : throw new InvalidOperationException("user_id_missing");
 
-    // GET /api/messages/conversations
+    // GET /api/messages/conversations — sadece arkadaş olduğum çiftler (ADR-016)
     [HttpGet("conversations")]
     public async Task<IActionResult> Conversations(CancellationToken ct)
     {
         var me = CurrentUserId;
 
-        // Tüm aktif (silinmemiş) mesajları al, peer'a göre group ve son mesajı seç.
-        // Küçük ölçek (100 user, ~bin mesaj) için in-memory aggregate yeterli; ölçeklenirse raw SQL DISTINCT ON'a geç.
+        // Önce arkadaşlarımı al
+        var friendIds = await _db.Friendships
+            .AsNoTracking()
+            .Where(f => f.Status == FriendshipStatus.Accepted && (f.RequesterId == me || f.AddresseeId == me))
+            .Select(f => f.RequesterId == me ? f.AddresseeId : f.RequesterId)
+            .ToListAsync(ct);
+
+        if (friendIds.Count == 0) return Ok(Array.Empty<ConversationDto>());
+
+        var friendIdsSet = friendIds.ToHashSet();
+
+        // Sadece arkadaş çiftleriyle olan mesajlar
         var messages = await _db.Messages
             .AsNoTracking()
-            .Where(m => (m.SenderId == me || m.RecipientId == me) && m.DeletedAt == null)
+            .Where(m => (m.SenderId == me || m.RecipientId == me) && m.DeletedAt == null
+                && (friendIdsSet.Contains(m.SenderId) || friendIdsSet.Contains(m.RecipientId)))
             .OrderByDescending(m => m.CreatedAt)
             .ToListAsync(ct);
 
         var grouped = messages
             .GroupBy(m => m.SenderId == me ? m.RecipientId : m.SenderId)
+            .Where(g => friendIdsSet.Contains(g.Key))
             .Select(g => g.First())
             .ToList();
 
@@ -103,6 +118,10 @@ public class MessagesController : ControllerBase
         var me = CurrentUserId;
         if (me == userId) return BadRequest(new { error = "cannot_query_self" });
 
+        // ADR-016: arkadaş kontrolü
+        if (!await _friends.AreAcceptedAsync(me, userId, ct))
+            return Forbid();
+
         var query = _db.Messages
             .AsNoTracking()
             .Where(m => ((m.SenderId == me && m.RecipientId == userId) ||
@@ -144,6 +163,10 @@ public class MessagesController : ControllerBase
             .FirstOrDefaultAsync(u => u.Id == userId && u.Status == UserStatus.Active, ct);
         if (recipient is null)
             return NotFound(new { error = "recipient_not_found_or_inactive" });
+
+        // ADR-016: arkadaş kontrolü
+        if (!await _friends.AreAcceptedAsync(me, userId, ct))
+            return Forbid();
 
         var cipher = _crypto.Encrypt(req.Content);
         var msg = new Message

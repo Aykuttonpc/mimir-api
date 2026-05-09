@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Mimir.Api.Data;
 using Mimir.Api.Hubs;
+using Mimir.Api.Middleware;
 using Mimir.Api.Services.Email;
 using Mimir.Api.Services.Security;
 using Serilog;
@@ -183,6 +184,9 @@ using (var scope = app.Services.CreateScope())
 
 app.UseForwardedHeaders();
 app.UseSerilogRequestLogging();
+
+// T-045 / ADR-015: app version gate — eski APK her authenticated path'te 426 alır
+app.UseMiddleware<AppVersionGateMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {

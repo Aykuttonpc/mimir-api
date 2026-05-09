@@ -91,7 +91,7 @@ builder.Services.AddSingleton<IMessageCrypto, AesGcmMessageCrypto>();
 // Friendship gating (ADR-016)
 builder.Services.AddScoped<IFriendshipChecker, FriendshipChecker>();
 
-// FCM push (ADR-017) — signal-only
+// FCM push (ADR-017) — signal-only. Singleton, eager-resolved aşağıda.
 builder.Services.AddSingleton<IPushDispatcher, FcmDispatcher>();
 
 // ─────────────────────────── Rate Limit (T-014) ─────────────────
@@ -246,6 +246,9 @@ using (var scope = app.Services.CreateScope())
         db.SaveChanges();
         bootLogger.LogInformation("Auto-Accepted friendship: {Count} çift (mevcut DM verisi)", autoAccepted);
     }
+
+    // FCM eager-init — startup'ta yüklensin ki log "FCM ready" veya "disabled" net görünsün.
+    sp.GetRequiredService<Mimir.Api.Services.Push.IPushDispatcher>();
 }
 
 app.UseForwardedHeaders();

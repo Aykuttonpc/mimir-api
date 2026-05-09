@@ -38,3 +38,10 @@ public record FriendDto(
     string Username,
     DateTime FriendsSince
 );
+
+// ─────────────────────── /me/devices (push, ADR-017) ─────────
+
+public record RegisterDeviceRequest(
+    [Required, StringLength(512, MinimumLength = 1)] string FcmToken,
+    [Required, StringLength(20, MinimumLength = 3)] string Platform   // "Android" | "Ios"
+);

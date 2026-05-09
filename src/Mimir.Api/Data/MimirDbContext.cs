@@ -14,6 +14,7 @@ public class MimirDbContext : DbContext
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Message> Messages => Set<Message>();
     public DbSet<Friendship> Friendships => Set<Friendship>();
+    public DbSet<UserDeviceToken> UserDeviceTokens => Set<UserDeviceToken>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -125,6 +126,22 @@ public class MimirDbContext : DbContext
             e.HasIndex(x => new { x.RequesterId, x.AddresseeId });
             e.HasIndex(x => new { x.AddresseeId, x.RequesterId });
             e.HasIndex(x => x.Status);
+        });
+
+        mb.Entity<UserDeviceToken>(e =>
+        {
+            e.ToTable("user_device_tokens");
+            e.HasKey(x => x.Id);
+
+            e.Property(x => x.FcmToken).HasMaxLength(512).IsRequired();
+            e.Property(x => x.Platform).HasConversion<string>().HasMaxLength(20).IsRequired();
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+            e.Property(x => x.LastSeenAt).HasDefaultValueSql("now()");
+
+            e.HasIndex(x => x.UserId);
+            // Aynı token aynı user'da bir kez (FCM aynı cihaza aynı token verir,
+            // app yeniden yüklendiğinde token rotate olur — eski silinir).
+            e.HasIndex(x => x.FcmToken).IsUnique();
         });
     }
 }

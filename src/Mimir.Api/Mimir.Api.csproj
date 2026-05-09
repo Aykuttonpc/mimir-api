@@ -38,6 +38,9 @@
 
     <!-- SMTP (gerçek email — Sprint #2 sonu) -->
     <PackageReference Include="MailKit" Version="4.16.0" />
+
+    <!-- Firebase Cloud Messaging (signal-only push, ADR-017) -->
+    <PackageReference Include="FirebaseAdmin" Version="3.0.0" />
   </ItemGroup>
 
 </Project>

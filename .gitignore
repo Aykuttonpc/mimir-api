@@ -18,6 +18,7 @@ publish/
 *.pfx
 *.key
 *.pem
+secrets/
 appsettings.*.json
 !appsettings.json
 !appsettings.Development.json

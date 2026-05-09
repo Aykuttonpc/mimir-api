@@ -9,6 +9,7 @@ using Mimir.Api.Data;
 using Mimir.Api.Hubs;
 using Mimir.Api.Middleware;
 using Mimir.Api.Services.Email;
+using Mimir.Api.Services.Push;
 using Mimir.Api.Services.Security;
 using Serilog;
 using StackExchange.Redis;
@@ -89,6 +90,9 @@ builder.Services.AddSingleton<IMessageCrypto, AesGcmMessageCrypto>();
 
 // Friendship gating (ADR-016)
 builder.Services.AddScoped<IFriendshipChecker, FriendshipChecker>();
+
+// FCM push (ADR-017) — signal-only
+builder.Services.AddSingleton<IPushDispatcher, FcmDispatcher>();
 
 // ─────────────────────────── Rate Limit (T-014) ─────────────────
 // IP-based fixed window. Single-instance MVP'de yeterli; multi-replica olduğunda Redis-distributed'a taşınır.

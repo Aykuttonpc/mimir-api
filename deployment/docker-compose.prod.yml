@@ -67,10 +67,12 @@ services:
       MinAppVersion__Android: ${MIN_APP_VERSION_ANDROID:-0.1.0}
       LatestAppVersion__Android: ${LATEST_APP_VERSION_ANDROID:-0.1.0}
       AppDownloadUrl__Android: ${APP_DOWNLOAD_URL_ANDROID:-}
+      Firebase__ServiceAccountPath: /app/secrets/fcm-service-account.json   # ADR-017
     ports:
       - "127.0.0.1:9001:8080"               # Localhost smoke test ve fallback için bind kalsın
     volumes:
       - mimir-dp-keys:/home/mimir/.aspnet/DataProtection-Keys   # ASP.NET Core data protection key persistence (container restart sonrası key kaybolmasın)
+      - /opt/mimir/secrets:/app/secrets:ro                       # ADR-017: FCM service account JSON (read-only)
     mem_limit: 1g
     networks:
       mimir-net: {}                           # Internal: db + redis ile konuşma (alias 'api')

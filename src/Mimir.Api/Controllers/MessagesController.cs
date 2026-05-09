@@ -7,6 +7,7 @@ using Mimir.Api.Contracts;
 using Mimir.Api.Data;
 using Mimir.Api.Domain;
 using Mimir.Api.Hubs;
+using Mimir.Api.Services.Push;
 using Mimir.Api.Services.Security;
 
 namespace Mimir.Api.Controllers;
@@ -20,6 +21,7 @@ public class MessagesController : ControllerBase
     private readonly IMessageCrypto _crypto;
     private readonly IHubContext<DmHub> _hub;
     private readonly IFriendshipChecker _friends;
+    private readonly IPushDispatcher _push;
     private readonly ILogger<MessagesController> _logger;
 
     public MessagesController(
@@ -27,12 +29,14 @@ public class MessagesController : ControllerBase
         IMessageCrypto crypto,
         IHubContext<DmHub> hub,
         IFriendshipChecker friends,
+        IPushDispatcher push,
         ILogger<MessagesController> logger)
     {
         _db = db;
         _crypto = crypto;
         _hub = hub;
         _friends = friends;
+        _push = push;
         _logger = logger;
     }
 
@@ -186,6 +190,10 @@ public class MessagesController : ControllerBase
         // SignalR push — gerek recipient'a, gerek sender'ın diğer cihazlarına
         await _hub.Clients.Group($"user-{userId}").SendAsync("MessageReceived", dto, ct);
         await _hub.Clients.Group($"user-{me}").SendAsync("MessageSent", dto, ct);
+
+        // ADR-017: FCM signal-only — uygulama kapalıysa cihaz bu sinyalle uyanır.
+        // Hub.Clients.Group offline cihazlara gitmez; FCM o boşluğu kapatır.
+        await _push.SendNewMessageSignalAsync(userId, me, ct);
 
         return Created($"/api/messages/{msg.Id}", dto);
     }

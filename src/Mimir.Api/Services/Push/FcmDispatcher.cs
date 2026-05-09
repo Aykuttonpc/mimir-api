@@ -30,10 +30,12 @@ public class FcmDispatcher : IPushDispatcher
         }
 
         // FirebaseApp.Create idempotent değil; aynı app iki kez yaratılırsa exception atar.
-        var app = FirebaseApp.DefaultInstance ?? FirebaseApp.Create(new AppOptions
-        {
-            Credential = GoogleCredential.FromFile(path),
-        });
+        // ProjectId credential'dan otomatik çıkmıyor — JSON'dan parse edip explicit ver (log temizliği).
+        var projectId = ReadProjectIdFromKeyFile(path);
+        var appOptions = new AppOptions { Credential = GoogleCredential.FromFile(path) };
+        if (!string.IsNullOrEmpty(projectId)) appOptions.ProjectId = projectId;
+
+        var app = FirebaseApp.DefaultInstance ?? FirebaseApp.Create(appOptions);
         _messaging = FirebaseMessaging.GetMessaging(app);
         _logger.LogInformation("FCM dispatcher initialized: project={ProjectId}", app.Options.ProjectId);
     }
@@ -110,4 +112,14 @@ public class FcmDispatcher : IPushDispatcher
     }
 
     private static string Truncate(string s) => s.Length <= 16 ? s : s[..16] + "...";
+
+    private static string? ReadProjectIdFromKeyFile(string path)
+    {
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
+            return doc.RootElement.TryGetProperty("project_id", out var pid) ? pid.GetString() : null;
+        }
+        catch { return null; }
+    }
 }

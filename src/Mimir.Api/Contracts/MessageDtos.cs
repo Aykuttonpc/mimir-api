@@ -32,3 +32,13 @@ public record ConversationDto(
 public record ActiveUserDto(Guid Id, string Username);
 
 public record MessageReadEvent(Guid MessageId, DateTime ReadAt);
+
+// T-035 — edit / soft delete
+public record EditMessageRequest(
+    [Required, StringLength(4000, MinimumLength = 1)] string Content
+);
+public record MessageEditedEvent(Guid MessageId, string Content, DateTime EditedAt);
+public record MessageDeletedEvent(Guid MessageId, DateTime DeletedAt);
+
+// T-033 — typing
+public record TypingEvent(Guid FromUserId, bool IsTyping);

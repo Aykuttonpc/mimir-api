@@ -167,6 +167,48 @@ public class MessagesController : ControllerBase
         return Created($"/api/messages/{msg.Id}", dto);
     }
 
+    // PATCH /api/messages/{id} — T-035: sadece sender düzenleyebilir
+    [HttpPatch("{id:guid}")]
+    public async Task<IActionResult> Edit(Guid id, [FromBody] EditMessageRequest req, CancellationToken ct)
+    {
+        var me = CurrentUserId;
+        var msg = await _db.Messages.FirstOrDefaultAsync(m => m.Id == id, ct);
+        if (msg is null || msg.DeletedAt is not null) return NotFound();
+        if (msg.SenderId != me) return Forbid();
+
+        var cipher = _crypto.Encrypt(req.Content);
+        msg.Iv = cipher.Iv;
+        msg.Ciphertext = cipher.Ciphertext;
+        msg.Tag = cipher.Tag;
+        msg.EditedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
+
+        var ev = new MessageEditedEvent(msg.Id, req.Content, msg.EditedAt.Value);
+        await _hub.Clients.Group($"user-{msg.RecipientId}").SendAsync("MessageEdited", ev, ct);
+        await _hub.Clients.Group($"user-{me}").SendAsync("MessageEdited", ev, ct);
+
+        return NoContent();
+    }
+
+    // DELETE /api/messages/{id} — T-035: soft delete (DeletedAt set), sadece sender
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    {
+        var me = CurrentUserId;
+        var msg = await _db.Messages.FirstOrDefaultAsync(m => m.Id == id, ct);
+        if (msg is null || msg.DeletedAt is not null) return NotFound();
+        if (msg.SenderId != me) return Forbid();
+
+        msg.DeletedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
+
+        var ev = new MessageDeletedEvent(msg.Id, msg.DeletedAt.Value);
+        await _hub.Clients.Group($"user-{msg.RecipientId}").SendAsync("MessageDeleted", ev, ct);
+        await _hub.Clients.Group($"user-{me}").SendAsync("MessageDeleted", ev, ct);
+
+        return NoContent();
+    }
+
     // POST /api/messages/{id}/read
     [HttpPost("{id:guid}/read")]
     public async Task<IActionResult> MarkRead(Guid id, CancellationToken ct)

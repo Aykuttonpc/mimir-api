@@ -105,11 +105,11 @@ public class DmHub : Hub
     }
 
     /// <summary>
-    /// Typing indicator — DB'ye yazılmaz, sadece broadcast.
+    /// Typing indicator — DB'ye yazılmaz, sadece broadcast (T-033).
     /// </summary>
     public async Task Typing(Guid toUserId, bool isTyping)
     {
         var me = CurrentUserId;
-        await Clients.Group($"user-{toUserId}").SendAsync("Typing", new { fromUserId = me, isTyping });
+        await Clients.Group($"user-{toUserId}").SendAsync("Typing", new TypingEvent(me, isTyping));
     }
 }

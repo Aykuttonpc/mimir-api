@@ -45,3 +45,17 @@ public record TypingEvent(Guid FromUserId, bool IsTyping);
 
 // Sprint #11 — presence (online/offline)
 public record PresenceChangedEvent(Guid UserId, bool Online, DateTime? LastSeenAt);
+
+// Sprint #12 — WebRTC voice call signaling (ephemeral, DB'ye yazılmaz)
+public record IncomingCallEvent(Guid CallerId, string CallerUsername, string SdpOffer);
+public record CallAnsweredEvent(Guid AnswererId, string SdpAnswer);
+public record IceCandidateEvent(Guid FromUserId, string Candidate);
+public record CallSimpleEvent(Guid FromUserId);   // RejectCall, EndCall, BusyCall ortak shape
+
+// TURN credentials response
+public record TurnCredentialsDto(
+    List<string> Urls,
+    string Username,
+    string Credential,
+    long ExpiresAt
+);

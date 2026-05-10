@@ -68,6 +68,9 @@ services:
       LatestAppVersion__Android: ${LATEST_APP_VERSION_ANDROID:-0.1.0}
       AppDownloadUrl__Android: ${APP_DOWNLOAD_URL_ANDROID:-}
       Firebase__ServiceAccountPath: /app/secrets/fcm-service-account.json   # ADR-017
+      Turn__Host: ${TURN_HOST:-}                # Sprint #12 — coturn external hostname
+      Turn__Realm: ${TURN_REALM:-mimir}
+      Turn__Secret: ${TURN_SECRET:-}             # HMAC secret, coturn ile aynı
     ports:
       - "127.0.0.1:9001:8080"               # Localhost smoke test ve fallback için bind kalsın
     volumes:
@@ -87,6 +90,32 @@ services:
       timeout: 5s
       start_period: 30s
       retries: 3
+
+  # Sprint #12 — coturn STUN/TURN for WebRTC voice calls (P2P + relay fallback).
+  # network_mode: host şart — UDP RTP relay için NAT translation şeffaf olmalı.
+  coturn:
+    image: coturn/coturn:4.6
+    container_name: mimir-coturn
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - "-n"
+      - "--use-auth-secret"
+      - "--static-auth-secret=${TURN_SECRET}"
+      - "--realm=${TURN_REALM:-mimir}"
+      - "--listening-port=3478"
+      - "--tls-listening-port=5349"
+      - "--external-ip=${TURN_EXTERNAL_IP}"
+      - "--min-port=49152"
+      - "--max-port=49200"
+      - "--no-multicast-peers"
+      - "--no-loopback-peers"
+      - "--no-cli"
+      - "--no-tlsv1"
+      - "--no-tlsv1_1"
+      - "--log-file=stdout"
+      - "--simple-log"
+    mem_limit: 128m
 
 volumes:
   mimir-db-data:

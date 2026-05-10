@@ -5,4 +5,7 @@ namespace Mimir.Api.Services.Push;
 public interface IPushDispatcher
 {
     Task SendNewMessageSignalAsync(Guid recipientUserId, Guid senderUserId, CancellationToken ct = default);
+
+    // Sprint #12: incoming voice call — high-priority, app uyanmali (locked screen ringing)
+    Task SendIncomingCallSignalAsync(Guid recipientUserId, Guid callerUserId, string callerUsername, CancellationToken ct = default);
 }

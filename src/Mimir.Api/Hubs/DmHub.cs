@@ -6,6 +6,7 @@ using Mimir.Api.Contracts;
 using Mimir.Api.Data;
 using Mimir.Api.Domain;
 using Mimir.Api.Services.Presence;
+using Mimir.Api.Services.Push;
 using Mimir.Api.Services.Security;
 
 namespace Mimir.Api.Hubs;
@@ -22,15 +23,17 @@ public class DmHub : Hub
     private readonly IMessageCrypto _crypto;
     private readonly IFriendshipChecker _friends;
     private readonly PresenceTracker _presence;
+    private readonly IPushDispatcher _push;
     private readonly ILogger<DmHub> _logger;
 
     public DmHub(MimirDbContext db, IMessageCrypto crypto, IFriendshipChecker friends,
-                 PresenceTracker presence, ILogger<DmHub> logger)
+                 PresenceTracker presence, IPushDispatcher push, ILogger<DmHub> logger)
     {
         _db = db;
         _crypto = crypto;
         _friends = friends;
         _presence = presence;
+        _push = push;
         _logger = logger;
     }
 
@@ -158,5 +161,55 @@ public class DmHub : Hub
     {
         var me = CurrentUserId;
         await Clients.Group($"user-{toUserId}").SendAsync("Typing", new TypingEvent(me, isTyping));
+    }
+
+    // ──────────────── Sprint #12 — WebRTC voice call signaling ────────────────
+    // Ephemeral — DB'ye HİÇBİR şey yazılmaz. Pure SignalR pass-through.
+    // Friendship gating: ADR-016, sadece arkadaşlar birbirini arayabilir.
+
+    public async Task OfferCall(Guid toUserId, string sdpOffer)
+    {
+        var me = CurrentUserId;
+        if (me == toUserId) throw new HubException("cannot_call_self");
+        if (!await _friends.AreAcceptedAsync(me, toUserId))
+            throw new HubException("not_friends");
+
+        var callerUsername = await _db.Users.AsNoTracking()
+            .Where(u => u.Id == me).Select(u => u.Username).FirstOrDefaultAsync() ?? "";
+
+        await Clients.Group($"user-{toUserId}")
+            .SendAsync("IncomingCall", new IncomingCallEvent(me, callerUsername, sdpOffer));
+
+        // App kapaliysa SignalR group'a üye değil — FCM ile cihazi uyandir.
+        // Telefon ekrani kilitliyse de yüksek-öncelikli push çalar.
+        await _push.SendIncomingCallSignalAsync(toUserId, me, callerUsername);
+    }
+
+    public async Task AnswerCall(Guid toUserId, string sdpAnswer)
+    {
+        var me = CurrentUserId;
+        await Clients.Group($"user-{toUserId}")
+            .SendAsync("CallAnswered", new CallAnsweredEvent(me, sdpAnswer));
+    }
+
+    public async Task SendIceCandidate(Guid toUserId, string candidate)
+    {
+        var me = CurrentUserId;
+        await Clients.Group($"user-{toUserId}")
+            .SendAsync("IceCandidate", new IceCandidateEvent(me, candidate));
+    }
+
+    public async Task RejectCall(Guid toUserId)
+    {
+        var me = CurrentUserId;
+        await Clients.Group($"user-{toUserId}")
+            .SendAsync("CallRejected", new CallSimpleEvent(me));
+    }
+
+    public async Task EndCall(Guid toUserId)
+    {
+        var me = CurrentUserId;
+        await Clients.Group($"user-{toUserId}")
+            .SendAsync("CallEnded", new CallSimpleEvent(me));
     }
 }

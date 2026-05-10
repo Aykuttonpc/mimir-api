@@ -40,7 +40,33 @@ public class FcmDispatcher : IPushDispatcher
         _logger.LogInformation("FCM dispatcher initialized: project={ProjectId}", app.Options.ProjectId);
     }
 
-    public async Task SendNewMessageSignalAsync(Guid recipientUserId, Guid senderUserId, CancellationToken ct = default)
+    public Task SendNewMessageSignalAsync(Guid recipientUserId, Guid senderUserId, CancellationToken ct = default) =>
+        SendInternalAsync(recipientUserId, BuildMessagePayloadAsync, senderUserId, "", ct);
+
+    public Task SendIncomingCallSignalAsync(Guid recipientUserId, Guid callerUserId, string callerUsername, CancellationToken ct = default) =>
+        SendInternalAsync(recipientUserId, BuildCallPayloadAsync, callerUserId, callerUsername, ct);
+
+    private Func<Guid, string, Task<Dictionary<string, string>>> BuildMessagePayloadAsync => (senderId, _) => Task.FromResult(
+        new Dictionary<string, string>
+        {
+            ["type"] = "newMessage",
+            ["senderUserId"] = senderId.ToString(),
+        });
+
+    private Func<Guid, string, Task<Dictionary<string, string>>> BuildCallPayloadAsync => (callerId, callerUsername) => Task.FromResult(
+        new Dictionary<string, string>
+        {
+            ["type"] = "callOffer",
+            ["callerUserId"] = callerId.ToString(),
+            ["callerUsername"] = callerUsername,
+        });
+
+    private async Task SendInternalAsync(
+        Guid recipientUserId,
+        Func<Guid, string, Task<Dictionary<string, string>>> payloadBuilder,
+        Guid otherId,
+        string extraStr,
+        CancellationToken ct)
     {
         if (_messaging is null) return;
 
@@ -54,25 +80,24 @@ public class FcmDispatcher : IPushDispatcher
 
         if (tokens.Count == 0) return;
 
-        // ADR-017: senderUsername payload'a — bildirim hızlı title gösterir.
-        // Mesaj İÇERİĞİ payload'a girmez; mobile uyandıktan sonra API'den çeker.
-        var senderUsername = await db.Users
-            .Where(u => u.Id == senderUserId)
-            .Select(u => u.Username)
-            .FirstOrDefaultAsync(ct) ?? "";
+        var data = await payloadBuilder(otherId, extraStr);
+        // newMessage için senderUsername'i DB'den ekle (call için zaten payload'da var)
+        if (data["type"] == "newMessage")
+        {
+            var senderUsername = await db.Users
+                .Where(u => u.Id == otherId)
+                .Select(u => u.Username)
+                .FirstOrDefaultAsync(ct) ?? "";
+            data["senderUsername"] = senderUsername;
+        }
 
         var msg = new MulticastMessage
         {
             Tokens = tokens,
-            Data = new Dictionary<string, string>
-            {
-                ["type"] = "newMessage",
-                ["senderUserId"] = senderUserId.ToString(),
-                ["senderUsername"] = senderUsername,
-            },
+            Data = data,
             Android = new AndroidConfig
             {
-                Priority = Priority.High,    // Doze mode'da bile uyandırsın
+                Priority = Priority.High,    // Doze mode + locked screen wakeup
             },
         };
 

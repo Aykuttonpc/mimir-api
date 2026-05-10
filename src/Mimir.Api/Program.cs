@@ -9,6 +9,7 @@ using Mimir.Api.Data;
 using Mimir.Api.Hubs;
 using Mimir.Api.Middleware;
 using Mimir.Api.Services.Email;
+using Mimir.Api.Services.Presence;
 using Mimir.Api.Services.Push;
 using Mimir.Api.Services.Security;
 using Serilog;
@@ -93,6 +94,9 @@ builder.Services.AddScoped<IFriendshipChecker, FriendshipChecker>();
 
 // FCM push (ADR-017) — signal-only. Singleton, eager-resolved aşağıda.
 builder.Services.AddSingleton<IPushDispatcher, FcmDispatcher>();
+
+// Presence tracker (Sprint #11) — in-memory, single-instance MVP. Multi-replica → Redis.
+builder.Services.AddSingleton<PresenceTracker>();
 
 // ─────────────────────────── Rate Limit (T-014) ─────────────────
 // IP-based fixed window. Single-instance MVP'de yeterli; multi-replica olduğunda Redis-distributed'a taşınır.

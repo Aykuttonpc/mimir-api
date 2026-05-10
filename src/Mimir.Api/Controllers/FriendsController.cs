@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Mimir.Api.Contracts;
 using Mimir.Api.Data;
 using Mimir.Api.Domain;
+using Mimir.Api.Services.Presence;
 
 namespace Mimir.Api.Controllers;
 
@@ -18,7 +19,12 @@ namespace Mimir.Api.Controllers;
 public class FriendsController : ControllerBase
 {
     private readonly MimirDbContext _db;
-    public FriendsController(MimirDbContext db) => _db = db;
+    private readonly PresenceTracker _presence;
+    public FriendsController(MimirDbContext db, PresenceTracker presence)
+    {
+        _db = db;
+        _presence = presence;
+    }
 
     private Guid CurrentUserId =>
         Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var id)
@@ -158,20 +164,41 @@ public class FriendsController : ControllerBase
         var otherIds = fs.Select(f => f.RequesterId == me ? f.AddresseeId : f.RequesterId).ToHashSet();
         var users = await _db.Users.AsNoTracking()
             .Where(u => otherIds.Contains(u.Id))
-            .Select(u => new { u.Id, u.Username })
-            .ToDictionaryAsync(u => u.Id, u => u.Username, ct);
+            .Select(u => new { u.Id, u.Username, u.LastSeenAt })
+            .ToDictionaryAsync(u => u.Id, u => u, ct);
+
+        var onlineMap = _presence.AreOnline(otherIds);
 
         var dtos = fs.Select(f =>
         {
             var otherId = f.RequesterId == me ? f.AddresseeId : f.RequesterId;
+            var info = users.GetValueOrDefault(otherId);
             return new FriendDto(
                 UserId: otherId,
-                Username: users.GetValueOrDefault(otherId, "(silinmiş)"),
-                FriendsSince: f.RespondedAt ?? f.CreatedAt
+                Username: info?.Username ?? "(silinmiş)",
+                FriendsSince: f.RespondedAt ?? f.CreatedAt,
+                IsOnline: onlineMap.GetValueOrDefault(otherId, false),
+                LastSeenAt: info?.LastSeenAt
             );
         }).ToList();
 
         return Ok(dtos);
+    }
+
+    // GET /api/friends/{userId}/presence — tek kullanıcının güncel durumu
+    [HttpGet("{userId:guid}/presence")]
+    public async Task<IActionResult> GetPresence(Guid userId, CancellationToken ct)
+    {
+        var me = CurrentUserId;
+        var isFriend = await _db.Friendships.AsNoTracking().AnyAsync(f =>
+            f.Status == FriendshipStatus.Accepted &&
+            ((f.RequesterId == me && f.AddresseeId == userId) ||
+             (f.RequesterId == userId && f.AddresseeId == me)), ct);
+        if (!isFriend) return Forbid();
+
+        var lastSeen = await _db.Users.AsNoTracking()
+            .Where(u => u.Id == userId).Select(u => u.LastSeenAt).FirstOrDefaultAsync(ct);
+        return Ok(new PresenceChangedEvent(userId, _presence.IsOnline(userId), lastSeen));
     }
 
     // DELETE /api/friends/{userId} — arkadaşlığı sonlandır

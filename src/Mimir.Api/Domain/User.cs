@@ -14,4 +14,8 @@ public class User
     public string? FriendKey { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }
+
+    /// <summary> Son görülme — SignalR disconnect'te update edilir. PresenceTracker
+    /// online users'ı in-memory tutar; LastSeenAt DB persist (offline kullanıcılar için). </summary>
+    public DateTime? LastSeenAt { get; set; }
 }

@@ -42,3 +42,6 @@ public record MessageDeletedEvent(Guid MessageId, DateTime DeletedAt);
 
 // T-033 — typing
 public record TypingEvent(Guid FromUserId, bool IsTyping);
+
+// Sprint #11 — presence (online/offline)
+public record PresenceChangedEvent(Guid UserId, bool Online, DateTime? LastSeenAt);

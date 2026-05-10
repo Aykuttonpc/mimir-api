@@ -36,7 +36,9 @@ public record FriendRequestDto(
 public record FriendDto(
     Guid UserId,
     string Username,
-    DateTime FriendsSince
+    DateTime FriendsSince,
+    bool IsOnline,
+    DateTime? LastSeenAt
 );
 
 // ─────────────────────── /me/devices (push, ADR-017) ─────────

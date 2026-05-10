@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Mimir.Api.Contracts;
 using Mimir.Api.Data;
 using Mimir.Api.Domain;
+using Mimir.Api.Services.Presence;
 using Mimir.Api.Services.Security;
 
 namespace Mimir.Api.Hubs;
@@ -20,13 +21,16 @@ public class DmHub : Hub
     private readonly MimirDbContext _db;
     private readonly IMessageCrypto _crypto;
     private readonly IFriendshipChecker _friends;
+    private readonly PresenceTracker _presence;
     private readonly ILogger<DmHub> _logger;
 
-    public DmHub(MimirDbContext db, IMessageCrypto crypto, IFriendshipChecker friends, ILogger<DmHub> logger)
+    public DmHub(MimirDbContext db, IMessageCrypto crypto, IFriendshipChecker friends,
+                 PresenceTracker presence, ILogger<DmHub> logger)
     {
         _db = db;
         _crypto = crypto;
         _friends = friends;
+        _presence = presence;
         _logger = logger;
     }
 
@@ -41,7 +45,15 @@ public class DmHub : Hub
     {
         var userId = CurrentUserId;
         await Groups.AddToGroupAsync(Context.ConnectionId, $"user-{userId}");
-        _logger.LogInformation("DM Hub connected: user={UserId} conn={ConnId}", userId, Context.ConnectionId);
+
+        // Presence — bu user offline iken mi geldi? Evet → arkadaşlara broadcast
+        var transitioned = _presence.TrackConnect(userId);
+        _logger.LogInformation("DM Hub connected: user={UserId} conn={ConnId} firstConn={First}",
+            userId, Context.ConnectionId, transitioned);
+        if (transitioned)
+        {
+            await BroadcastPresenceToFriendsAsync(userId, online: true, lastSeenAt: null);
+        }
         await base.OnConnectedAsync();
     }
 
@@ -49,7 +61,36 @@ public class DmHub : Hub
     {
         var userId = CurrentUserId;
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"user-{userId}");
+
+        // Presence — bu user'ın son connection'ı mı? Evet → LastSeenAt update + broadcast
+        var transitioned = _presence.TrackDisconnect(userId);
+        if (transitioned)
+        {
+            var now = DateTime.UtcNow;
+            await _db.Users
+                .Where(u => u.Id == userId)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.LastSeenAt, now));
+            await BroadcastPresenceToFriendsAsync(userId, online: false, lastSeenAt: now);
+        }
         await base.OnDisconnectedAsync(exception);
+    }
+
+    private async Task BroadcastPresenceToFriendsAsync(Guid userId, bool online, DateTime? lastSeenAt)
+    {
+        // Sadece arkadaşlara presence yayını — ADR-016 kapalı ağ
+        var friendIds = await _db.Friendships
+            .AsNoTracking()
+            .Where(f => f.Status == FriendshipStatus.Accepted &&
+                        (f.RequesterId == userId || f.AddresseeId == userId))
+            .Select(f => f.RequesterId == userId ? f.AddresseeId : f.RequesterId)
+            .ToListAsync();
+        if (friendIds.Count == 0) return;
+
+        var ev = new PresenceChangedEvent(userId, online, lastSeenAt);
+        foreach (var fId in friendIds)
+        {
+            await Clients.Group($"user-{fId}").SendAsync("PresenceChanged", ev);
+        }
     }
 
     /// <summary>

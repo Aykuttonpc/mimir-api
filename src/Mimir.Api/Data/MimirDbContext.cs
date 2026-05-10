@@ -33,6 +33,8 @@ public class MimirDbContext : DbContext
             e.Property(x => x.IsAdmin).HasDefaultValue(false);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
             e.Property(x => x.FriendKey).HasMaxLength(20);
+            // Sprint #11: presence — DB persist (offline kullanıcılar için son görülme).
+            e.Property(x => x.LastSeenAt);
 
             e.HasIndex(x => x.Username).IsUnique();
             e.HasIndex(x => x.Email).IsUnique();

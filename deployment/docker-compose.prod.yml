@@ -99,7 +99,6 @@ services:
     restart: unless-stopped
     network_mode: host
     command:
-      - "-n"
       - "--use-auth-secret"
       - "--static-auth-secret=${TURN_SECRET}"
       - "--realm=${TURN_REALM:-mimir}"
@@ -109,10 +108,7 @@ services:
       - "--min-port=49152"
       - "--max-port=49200"
       - "--no-multicast-peers"
-      - "--no-loopback-peers"
       - "--no-cli"
-      - "--no-tlsv1"
-      - "--no-tlsv1_1"
       - "--log-file=stdout"
       - "--simple-log"
     mem_limit: 128m

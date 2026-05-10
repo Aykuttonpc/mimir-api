@@ -167,49 +167,66 @@ public class DmHub : Hub
     // Ephemeral — DB'ye HİÇBİR şey yazılmaz. Pure SignalR pass-through.
     // Friendship gating: ADR-016, sadece arkadaşlar birbirini arayabilir.
 
-    public async Task OfferCall(Guid toUserId, string sdpOffer)
+    public async Task OfferCall(string toUserId, string sdpOffer)
     {
         var me = CurrentUserId;
-        if (me == toUserId) throw new HubException("cannot_call_self");
-        if (!await _friends.AreAcceptedAsync(me, toUserId))
+        _logger.LogInformation("📞 OfferCall: from={From} to={To} sdpLen={Len}", me, toUserId, sdpOffer?.Length ?? 0);
+
+        if (!Guid.TryParse(toUserId, out var toGuid))
+        {
+            _logger.LogWarning("OfferCall: invalid toUserId={To}", toUserId);
+            throw new HubException("invalid_user_id");
+        }
+        if (me == toGuid) throw new HubException("cannot_call_self");
+        if (!await _friends.AreAcceptedAsync(me, toGuid))
+        {
+            _logger.LogWarning("OfferCall: not_friends from={From} to={To}", me, toGuid);
             throw new HubException("not_friends");
+        }
 
         var callerUsername = await _db.Users.AsNoTracking()
             .Where(u => u.Id == me).Select(u => u.Username).FirstOrDefaultAsync() ?? "";
 
-        await Clients.Group($"user-{toUserId}")
-            .SendAsync("IncomingCall", new IncomingCallEvent(me, callerUsername, sdpOffer));
+        await Clients.Group($"user-{toGuid}")
+            .SendAsync("IncomingCall", new IncomingCallEvent(me, callerUsername, sdpOffer ?? ""));
+        _logger.LogInformation("📞 OfferCall broadcast → user-{To} (callerUsername={Username})", toGuid, callerUsername);
 
         // App kapaliysa SignalR group'a üye değil — FCM ile cihazi uyandir.
-        // Telefon ekrani kilitliyse de yüksek-öncelikli push çalar.
-        await _push.SendIncomingCallSignalAsync(toUserId, me, callerUsername);
+        await _push.SendIncomingCallSignalAsync(toGuid, me, callerUsername);
     }
 
-    public async Task AnswerCall(Guid toUserId, string sdpAnswer)
+    public async Task AnswerCall(string toUserId, string sdpAnswer)
     {
         var me = CurrentUserId;
-        await Clients.Group($"user-{toUserId}")
-            .SendAsync("CallAnswered", new CallAnsweredEvent(me, sdpAnswer));
+        _logger.LogInformation("📞 AnswerCall: from={From} to={To} sdpLen={Len}", me, toUserId, sdpAnswer?.Length ?? 0);
+        if (!Guid.TryParse(toUserId, out var toGuid)) throw new HubException("invalid_user_id");
+        await Clients.Group($"user-{toGuid}")
+            .SendAsync("CallAnswered", new CallAnsweredEvent(me, sdpAnswer ?? ""));
     }
 
-    public async Task SendIceCandidate(Guid toUserId, string candidate)
+    public async Task SendIceCandidate(string toUserId, string candidate)
     {
         var me = CurrentUserId;
-        await Clients.Group($"user-{toUserId}")
-            .SendAsync("IceCandidate", new IceCandidateEvent(me, candidate));
+        if (!Guid.TryParse(toUserId, out var toGuid)) return;
+        await Clients.Group($"user-{toGuid}")
+            .SendAsync("IceCandidate", new IceCandidateEvent(me, candidate ?? ""));
     }
 
-    public async Task RejectCall(Guid toUserId)
+    public async Task RejectCall(string toUserId)
     {
         var me = CurrentUserId;
-        await Clients.Group($"user-{toUserId}")
+        _logger.LogInformation("📞 RejectCall: from={From} to={To}", me, toUserId);
+        if (!Guid.TryParse(toUserId, out var toGuid)) return;
+        await Clients.Group($"user-{toGuid}")
             .SendAsync("CallRejected", new CallSimpleEvent(me));
     }
 
-    public async Task EndCall(Guid toUserId)
+    public async Task EndCall(string toUserId)
     {
         var me = CurrentUserId;
-        await Clients.Group($"user-{toUserId}")
+        _logger.LogInformation("📞 EndCall: from={From} to={To}", me, toUserId);
+        if (!Guid.TryParse(toUserId, out var toGuid)) return;
+        await Clients.Group($"user-{toGuid}")
             .SendAsync("CallEnded", new CallSimpleEvent(me));
     }
 }

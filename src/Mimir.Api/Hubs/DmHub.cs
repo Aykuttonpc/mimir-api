@@ -170,26 +170,15 @@ public class DmHub : Hub
     public async Task OfferCall(string toUserId, string sdpOffer)
     {
         var me = CurrentUserId;
-        _logger.LogInformation("📞 OfferCall: from={From} to={To} sdpLen={Len}", me, toUserId, sdpOffer?.Length ?? 0);
-
-        if (!Guid.TryParse(toUserId, out var toGuid))
-        {
-            _logger.LogWarning("OfferCall: invalid toUserId={To}", toUserId);
-            throw new HubException("invalid_user_id");
-        }
+        if (!Guid.TryParse(toUserId, out var toGuid)) throw new HubException("invalid_user_id");
         if (me == toGuid) throw new HubException("cannot_call_self");
-        if (!await _friends.AreAcceptedAsync(me, toGuid))
-        {
-            _logger.LogWarning("OfferCall: not_friends from={From} to={To}", me, toGuid);
-            throw new HubException("not_friends");
-        }
+        if (!await _friends.AreAcceptedAsync(me, toGuid)) throw new HubException("not_friends");
 
         var callerUsername = await _db.Users.AsNoTracking()
             .Where(u => u.Id == me).Select(u => u.Username).FirstOrDefaultAsync() ?? "";
 
         await Clients.Group($"user-{toGuid}")
             .SendAsync("IncomingCall", new IncomingCallEvent(me, callerUsername, sdpOffer ?? ""));
-        _logger.LogInformation("📞 OfferCall broadcast → user-{To} (callerUsername={Username})", toGuid, callerUsername);
 
         // App kapaliysa SignalR group'a üye değil — FCM ile cihazi uyandir.
         await _push.SendIncomingCallSignalAsync(toGuid, me, callerUsername);
@@ -198,7 +187,6 @@ public class DmHub : Hub
     public async Task AnswerCall(string toUserId, string sdpAnswer)
     {
         var me = CurrentUserId;
-        _logger.LogInformation("📞 AnswerCall: from={From} to={To} sdpLen={Len}", me, toUserId, sdpAnswer?.Length ?? 0);
         if (!Guid.TryParse(toUserId, out var toGuid)) throw new HubException("invalid_user_id");
         await Clients.Group($"user-{toGuid}")
             .SendAsync("CallAnswered", new CallAnsweredEvent(me, sdpAnswer ?? ""));
@@ -215,7 +203,6 @@ public class DmHub : Hub
     public async Task RejectCall(string toUserId)
     {
         var me = CurrentUserId;
-        _logger.LogInformation("📞 RejectCall: from={From} to={To}", me, toUserId);
         if (!Guid.TryParse(toUserId, out var toGuid)) return;
         await Clients.Group($"user-{toGuid}")
             .SendAsync("CallRejected", new CallSimpleEvent(me));
@@ -224,7 +211,6 @@ public class DmHub : Hub
     public async Task EndCall(string toUserId)
     {
         var me = CurrentUserId;
-        _logger.LogInformation("📞 EndCall: from={From} to={To}", me, toUserId);
         if (!Guid.TryParse(toUserId, out var toGuid)) return;
         await Clients.Group($"user-{toGuid}")
             .SendAsync("CallEnded", new CallSimpleEvent(me));

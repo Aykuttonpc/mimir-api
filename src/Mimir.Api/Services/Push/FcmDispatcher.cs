@@ -40,32 +40,36 @@ public class FcmDispatcher : IPushDispatcher
         _logger.LogInformation("FCM dispatcher initialized: project={ProjectId}", app.Options.ProjectId);
     }
 
-    public Task SendNewMessageSignalAsync(Guid recipientUserId, Guid senderUserId, CancellationToken ct = default) =>
-        SendInternalAsync(recipientUserId, BuildMessagePayloadAsync, senderUserId, "", ct);
-
-    public Task SendIncomingCallSignalAsync(Guid recipientUserId, Guid callerUserId, string callerUsername, CancellationToken ct = default) =>
-        SendInternalAsync(recipientUserId, BuildCallPayloadAsync, callerUserId, callerUsername, ct);
-
-    private Func<Guid, string, Task<Dictionary<string, string>>> BuildMessagePayloadAsync => (senderId, _) => Task.FromResult(
-        new Dictionary<string, string>
+    public Task SendNewMessageSignalAsync(Guid recipientUserId, Guid senderUserId, CancellationToken ct = default)
+    {
+        var data = new Dictionary<string, string>
         {
             ["type"] = "newMessage",
-            ["senderUserId"] = senderId.ToString(),
-        });
+            ["senderUserId"] = senderUserId.ToString(),
+            // senderUsername DB'den eklenecek SendInternalAsync içinde
+        };
+        return SendInternalAsync(recipientUserId, data, includeSenderUsername: true, senderForUsername: senderUserId, ct);
+    }
 
-    private Func<Guid, string, Task<Dictionary<string, string>>> BuildCallPayloadAsync => (callerId, callerUsername) => Task.FromResult(
-        new Dictionary<string, string>
+    public Task SendIncomingCallSignalAsync(Guid recipientUserId, Guid callerUserId, string callerUsername, string sdpOffer, CancellationToken ct = default)
+    {
+        // SDP offer payload'a giriyor — app uyandığında SignalR'a bağlanmayı beklemeden
+        // CallManager state Incoming'e geçer (FCM kaçma senaryosu için).
+        var data = new Dictionary<string, string>
         {
             ["type"] = "callOffer",
-            ["callerUserId"] = callerId.ToString(),
+            ["callerUserId"] = callerUserId.ToString(),
             ["callerUsername"] = callerUsername,
-        });
+            ["sdpOffer"] = sdpOffer,
+        };
+        return SendInternalAsync(recipientUserId, data, includeSenderUsername: false, senderForUsername: Guid.Empty, ct);
+    }
 
     private async Task SendInternalAsync(
         Guid recipientUserId,
-        Func<Guid, string, Task<Dictionary<string, string>>> payloadBuilder,
-        Guid otherId,
-        string extraStr,
+        Dictionary<string, string> data,
+        bool includeSenderUsername,
+        Guid senderForUsername,
         CancellationToken ct)
     {
         if (_messaging is null) return;
@@ -80,12 +84,10 @@ public class FcmDispatcher : IPushDispatcher
 
         if (tokens.Count == 0) return;
 
-        var data = await payloadBuilder(otherId, extraStr);
-        // newMessage için senderUsername'i DB'den ekle (call için zaten payload'da var)
-        if (data["type"] == "newMessage")
+        if (includeSenderUsername)
         {
             var senderUsername = await db.Users
-                .Where(u => u.Id == otherId)
+                .Where(u => u.Id == senderForUsername)
                 .Select(u => u.Username)
                 .FirstOrDefaultAsync(ct) ?? "";
             data["senderUsername"] = senderUsername;

@@ -180,8 +180,8 @@ public class DmHub : Hub
         await Clients.Group($"user-{toGuid}")
             .SendAsync("IncomingCall", new IncomingCallEvent(me, callerUsername, sdpOffer ?? ""));
 
-        // App kapaliysa SignalR group'a üye değil — FCM ile cihazi uyandir.
-        await _push.SendIncomingCallSignalAsync(toGuid, me, callerUsername);
+        // App kapaliysa SignalR group'a üye değil — FCM ile cihazi uyandir + SDP offer payload'da.
+        await _push.SendIncomingCallSignalAsync(toGuid, me, callerUsername, sdpOffer ?? "");
     }
 
     public async Task AnswerCall(string toUserId, string sdpAnswer)

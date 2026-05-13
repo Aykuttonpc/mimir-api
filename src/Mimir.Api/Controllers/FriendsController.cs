@@ -71,9 +71,12 @@ public class FriendsController : ControllerBase
 
     private async Task<IActionResult> ResubmitRequestAsync(Friendship existing, Guid me, CancellationToken ct)
     {
-        // Önce reject edildiyse, yeniden istek için Pending'e çevir + RequesterId/AddresseeId güncelle
+        // Reject sonrası yeniden istek: requester/addressee'yi doğru tarafa ata.
+        // Yeni Addressee = mevcut çift içinde "ben olmayan" taraf — eski Requester ya da
+        // eski Addressee, hangisi me değilse o.
+        var newAddressee = existing.RequesterId == me ? existing.AddresseeId : existing.RequesterId;
         existing.RequesterId = me;
-        existing.AddresseeId = existing.RequesterId == me ? existing.AddresseeId : existing.RequesterId;
+        existing.AddresseeId = newAddressee;
         existing.Status = FriendshipStatus.Pending;
         existing.RespondedAt = null;
         existing.CreatedAt = DateTime.UtcNow;

@@ -126,13 +126,14 @@ public class AdminController : ControllerBase
         if (user.Status != UserStatus.PendingAdmin && req.Decision != "suspend")
             return BadRequest(new { error = "user_not_pending" });
 
-        var decision = req.Decision switch
+        ApprovalDecision decision;
+        switch (req.Decision)
         {
-            "approve" => ApprovalDecision.Approved,
-            "reject"  => ApprovalDecision.Rejected,
-            "suspend" => ApprovalDecision.Suspended,
-            _ => throw new ArgumentException("invalid_decision"),
-        };
+            case "approve": decision = ApprovalDecision.Approved; break;
+            case "reject":  decision = ApprovalDecision.Rejected; break;
+            case "suspend": decision = ApprovalDecision.Suspended; break;
+            default: return BadRequest(new { error = "invalid_decision" });
+        }
 
         user.Status = decision switch
         {

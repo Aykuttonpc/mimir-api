@@ -151,8 +151,8 @@ builder.Services.AddHealthChecks()
 var app = builder.Build();
 
 // ─────────────────────────── DB Migrate + Bootstrap Admin Seed ──
-// MVP: startup migration. Tek-instance deploy'da OK.
-// TODO Sprint #2 sonu: init-container pattern'i ya da CI step'i değerlendir (race condition / multi-replica güvenliği).
+// Startup migration — single-instance deploy. Multi-replica'ya geçilirse
+// init-container veya migration job pattern'ine taşı (concurrent migrate race).
 using (var scope = app.Services.CreateScope())
 {
     var sp = scope.ServiceProvider;

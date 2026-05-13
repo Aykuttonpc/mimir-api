@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Mimir.Api.Contracts;
 using Mimir.Api.Data;
 using Mimir.Api.Domain;
+using Mimir.Api.Services.Conversations;
 using Mimir.Api.Services.Presence;
 using Mimir.Api.Services.Push;
 using Mimir.Api.Services.Security;
@@ -12,25 +13,34 @@ using Mimir.Api.Services.Security;
 namespace Mimir.Api.Hubs;
 
 /// <summary>
-/// 1-1 DM Hub — JWT'li kullanıcılar. Server-side AES-GCM encryption (ADR-012).
-/// Online presence: connection sırasında "user-{id}" group'a join.
-/// Same user multiple device → tüm bağlantılar aynı group'ta = mesaj broadcast.
+/// Sprint #14: Conversation-aware DM Hub. Üye olduğun her conversation için `conv-{id}` SignalR
+/// group'una otomatik join. Mesaj broadcast bu group üzerinden tüm üyelere ulaşır.
+/// `user-{id}` group'u da korunur — voice call signaling + direct user push için.
+/// Voice call DM-only kalır (Sprint #15+ değerlendir).
 /// </summary>
 [Authorize]
 public class DmHub : Hub
 {
     private readonly MimirDbContext _db;
     private readonly IMessageCrypto _crypto;
+    private readonly IConversationService _convs;
     private readonly IFriendshipChecker _friends;
     private readonly PresenceTracker _presence;
     private readonly IPushDispatcher _push;
     private readonly ILogger<DmHub> _logger;
 
-    public DmHub(MimirDbContext db, IMessageCrypto crypto, IFriendshipChecker friends,
-                 PresenceTracker presence, IPushDispatcher push, ILogger<DmHub> logger)
+    public DmHub(
+        MimirDbContext db,
+        IMessageCrypto crypto,
+        IConversationService convs,
+        IFriendshipChecker friends,
+        PresenceTracker presence,
+        IPushDispatcher push,
+        ILogger<DmHub> logger)
     {
         _db = db;
         _crypto = crypto;
+        _convs = convs;
         _friends = friends;
         _presence = presence;
         _push = push;
@@ -49,10 +59,20 @@ public class DmHub : Hub
         var userId = CurrentUserId;
         await Groups.AddToGroupAsync(Context.ConnectionId, $"user-{userId}");
 
-        // Presence — bu user offline iken mi geldi? Evet → arkadaşlara broadcast
+        // Conversation group'larına otomatik join — istemci tek tek subscribe etmez
+        var convIds = await _db.ConversationMembers
+            .AsNoTracking()
+            .Where(m => m.UserId == userId && m.LeftAt == null)
+            .Select(m => m.ConversationId)
+            .ToListAsync();
+        foreach (var convId in convIds)
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"conv-{convId}");
+        }
+
         var transitioned = _presence.TrackConnect(userId);
-        _logger.LogInformation("DM Hub connected: user={UserId} conn={ConnId} firstConn={First}",
-            userId, Context.ConnectionId, transitioned);
+        _logger.LogInformation("DM Hub connected: user={UserId} conn={ConnId} convs={ConvCount} firstConn={First}",
+            userId, Context.ConnectionId, convIds.Count, transitioned);
         if (transitioned)
         {
             await BroadcastPresenceToFriendsAsync(userId, online: true, lastSeenAt: null);
@@ -65,7 +85,6 @@ public class DmHub : Hub
         var userId = CurrentUserId;
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"user-{userId}");
 
-        // Presence — bu user'ın son connection'ı mı? Evet → LastSeenAt update + broadcast
         var transitioned = _presence.TrackDisconnect(userId);
         if (transitioned)
         {
@@ -80,7 +99,6 @@ public class DmHub : Hub
 
     private async Task BroadcastPresenceToFriendsAsync(Guid userId, bool online, DateTime? lastSeenAt)
     {
-        // Sadece arkadaşlara presence yayını — ADR-016 kapalı ağ
         var friendIds = await _db.Friendships
             .AsNoTracking()
             .Where(f => f.Status == FriendshipStatus.Accepted &&
@@ -97,75 +115,78 @@ public class DmHub : Hub
     }
 
     /// <summary>
-    /// Real-time gönderim. Plain text taşınır (TLS), server'da encrypt edilir.
-    /// Recipient'ın açık tüm cihazlarına ve sender'ın diğer cihazlarına push.
+    /// Conversation'a real-time mesaj gönder. Üye olmayan reddedilir.
+    /// Server'da encrypt, conv group'una broadcast, offline üyelere FCM.
     /// </summary>
-    public async Task SendMessage(Guid toUserId, string plaintext)
+    public async Task SendMessage(string conversationId, string plaintext)
     {
         var me = CurrentUserId;
-        if (me == toUserId)
-            throw new HubException("cannot_send_to_self");
+        if (!Guid.TryParse(conversationId, out var convId))
+            throw new HubException("invalid_conversation_id");
         if (string.IsNullOrWhiteSpace(plaintext))
             throw new HubException("empty_content");
         if (plaintext.Length > 4000)
             throw new HubException("content_too_long");
 
-        var recipient = await _db.Users
-            .FirstOrDefaultAsync(u => u.Id == toUserId && u.Status == UserStatus.Active);
-        if (recipient is null)
-            throw new HubException("recipient_not_found_or_inactive");
-
-        // ADR-016: arkadaş kontrolü
-        if (!await _friends.AreAcceptedAsync(me, toUserId))
-            throw new HubException("not_friends");
+        if (await _convs.GetActiveMemberAsync(convId, me) is null)
+            throw new HubException("not_member");
 
         var cipher = _crypto.Encrypt(plaintext);
         var msg = new Message
         {
+            ConversationId = convId,
             SenderId = me,
-            RecipientId = toUserId,
             Iv = cipher.Iv,
             Ciphertext = cipher.Ciphertext,
             Tag = cipher.Tag,
         };
         _db.Messages.Add(msg);
         await _db.SaveChangesAsync();
+        await _convs.TouchActivityAsync(convId);
 
-        var dto = new MessageDto(msg.Id, msg.SenderId, msg.RecipientId, plaintext,
-            msg.CreatedAt, null, null, null);
+        var dto = new MessageDto(msg.Id, convId, me, plaintext, msg.CreatedAt, null, null);
+        await Clients.Group($"conv-{convId}").SendAsync("MessageReceived", dto);
 
-        await Clients.Group($"user-{toUserId}").SendAsync("MessageReceived", dto);
-        await Clients.Group($"user-{me}").SendAsync("MessageSent", dto);
-    }
-
-    public async Task MarkAsRead(Guid messageId)
-    {
-        var me = CurrentUserId;
-        var msg = await _db.Messages
-            .FirstOrDefaultAsync(m => m.Id == messageId && m.RecipientId == me && m.DeletedAt == null);
-        if (msg is null)
-            throw new HubException("message_not_found");
-        if (msg.ReadAt is not null) return;
-
-        msg.ReadAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
-
-        await Clients.Group($"user-{msg.SenderId}")
-            .SendAsync("MessageRead", new MessageReadEvent(msg.Id, msg.ReadAt.Value));
+        var memberIds = await _convs.GetMemberIdsAsync(convId);
+        foreach (var memberId in memberIds.Where(id => id != me))
+        {
+            await _push.SendNewMessageSignalAsync(memberId, me, convId);
+        }
     }
 
     /// <summary>
-    /// Typing indicator — DB'ye yazılmaz, sadece broadcast (T-033).
+    /// Conversation'ı şu ana kadar okunmuş işaretle. LastReadAt user'a özgü.
     /// </summary>
-    public async Task Typing(Guid toUserId, bool isTyping)
+    public async Task MarkConversationRead(string conversationId)
     {
         var me = CurrentUserId;
-        await Clients.Group($"user-{toUserId}").SendAsync("Typing", new TypingEvent(me, isTyping));
+        if (!Guid.TryParse(conversationId, out var convId))
+            throw new HubException("invalid_conversation_id");
+
+        var member = await _convs.GetActiveMemberAsync(convId, me);
+        if (member is null) throw new HubException("not_member");
+
+        var now = DateTime.UtcNow;
+        member.LastReadAt = now;
+        await _db.SaveChangesAsync();
+
+        await Clients.Group($"conv-{convId}")
+            .SendAsync("ConversationRead", new ConversationReadEvent(convId, me, now));
     }
 
-    // ──────────────── Sprint #12 — WebRTC voice call signaling ────────────────
+    public async Task Typing(string conversationId, bool isTyping)
+    {
+        var me = CurrentUserId;
+        if (!Guid.TryParse(conversationId, out var convId)) return;
+        if (await _convs.GetActiveMemberAsync(convId, me) is null) return;
+
+        await Clients.GroupExcept($"conv-{convId}", Context.ConnectionId)
+            .SendAsync("Typing", new TypingEvent(convId, me, isTyping));
+    }
+
+    // ──────────────── WebRTC voice call signaling (Sprint #12 — DM only) ────────────────
     // Ephemeral — DB'ye HİÇBİR şey yazılmaz. Pure SignalR pass-through.
-    // Friendship gating: ADR-016, sadece arkadaşlar birbirini arayabilir.
+    // Friendship gating (ADR-016): sadece arkadaşlar birbirini arayabilir.
 
     public async Task OfferCall(string toUserId, string sdpOffer)
     {
@@ -180,7 +201,7 @@ public class DmHub : Hub
         await Clients.Group($"user-{toGuid}")
             .SendAsync("IncomingCall", new IncomingCallEvent(me, callerUsername, sdpOffer ?? ""));
 
-        // App kapaliysa SignalR group'a üye değil — FCM ile cihazi uyandir + SDP offer payload'da.
+        // App kapalıysa SignalR group'a üye değil — FCM ile cihazı uyandır + SDP payload'da.
         await _push.SendIncomingCallSignalAsync(toGuid, me, callerUsername, sdpOffer ?? "");
     }
 

@@ -15,6 +15,8 @@ public class MimirDbContext : DbContext
     public DbSet<Message> Messages => Set<Message>();
     public DbSet<Friendship> Friendships => Set<Friendship>();
     public DbSet<UserDeviceToken> UserDeviceTokens => Set<UserDeviceToken>();
+    public DbSet<Conversation> Conversations => Set<Conversation>();
+    public DbSet<ConversationMember> ConversationMembers => Set<ConversationMember>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -109,12 +111,36 @@ public class MimirDbContext : DbContext
             e.Property(x => x.Tag).IsRequired();
             e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
 
-            // Conversation listing — sender görünüm
-            e.HasIndex(x => new { x.SenderId, x.RecipientId, x.CreatedAt });
-            // Recipient görünüm + unread query
-            e.HasIndex(x => new { x.RecipientId, x.SenderId, x.CreatedAt });
-            // Unread count query
-            e.HasIndex(x => new { x.RecipientId, x.ReadAt });
+            // Sprint #14: ConversationId temel sorgu eksenidir.
+            // Mesaj timeline (conv + tarih), sender filtresi sıkça gerekmez.
+            e.HasIndex(x => new { x.ConversationId, x.CreatedAt });
+            e.HasIndex(x => x.SenderId);
+        });
+
+        mb.Entity<Conversation>(e =>
+        {
+            e.ToTable("conversations");
+            e.HasKey(x => x.Id);
+
+            e.Property(x => x.Type).HasConversion<string>().HasMaxLength(10).IsRequired();
+            e.Property(x => x.Name).HasMaxLength(100);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+
+            e.HasIndex(x => x.LastActivityAt);
+        });
+
+        mb.Entity<ConversationMember>(e =>
+        {
+            e.ToTable("conversation_members");
+            e.HasKey(x => new { x.ConversationId, x.UserId });
+
+            e.Property(x => x.Role).HasConversion<string>().HasMaxLength(10).IsRequired();
+            e.Property(x => x.JoinedAt).HasDefaultValueSql("now()");
+
+            // Kullanıcının üye olduğu konuşmaları listeleme — chat list query
+            e.HasIndex(x => new { x.UserId, x.LeftAt });
+            // Conversation üyeleri listeleme
+            e.HasIndex(x => x.ConversationId);
         });
 
         mb.Entity<Friendship>(e =>

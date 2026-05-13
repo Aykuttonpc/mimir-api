@@ -92,6 +92,10 @@ builder.Services.AddSingleton<IMessageCrypto, AesGcmMessageCrypto>();
 // Friendship gating (ADR-016)
 builder.Services.AddScoped<IFriendshipChecker, FriendshipChecker>();
 
+// Sprint #14 — Conversation domain helper (membership lookup, idempotent DM, activity touch)
+builder.Services.AddScoped<Mimir.Api.Services.Conversations.IConversationService,
+    Mimir.Api.Services.Conversations.ConversationService>();
+
 // FCM push (ADR-017) — signal-only. Singleton, eager-resolved aşağıda.
 builder.Services.AddSingleton<IPushDispatcher, FcmDispatcher>();
 
@@ -216,40 +220,8 @@ using (var scope = app.Services.CreateScope())
         bootLogger.LogInformation("FriendKey üretildi: {Count} kullanıcı", usersWithoutKey.Count);
     }
 
-    // 2. Mevcut DM çiftlerini Auto-Accepted friendship'e taşı
-    var msgPairs = db.Messages
-        .Where(m => m.DeletedAt == null)
-        .Select(m => new { m.SenderId, m.RecipientId })
-        .ToList()
-        .Select(p => p.SenderId.CompareTo(p.RecipientId) < 0
-            ? (Lo: p.SenderId, Hi: p.RecipientId)
-            : (Lo: p.RecipientId, Hi: p.SenderId))
-        .Distinct()
-        .ToList();
-
-    int autoAccepted = 0;
-    foreach (var p in msgPairs)
-    {
-        var exists = db.Friendships.Any(f =>
-            (f.RequesterId == p.Lo && f.AddresseeId == p.Hi) ||
-            (f.RequesterId == p.Hi && f.AddresseeId == p.Lo));
-        if (!exists)
-        {
-            db.Friendships.Add(new Mimir.Api.Domain.Friendship
-            {
-                RequesterId = p.Lo,
-                AddresseeId = p.Hi,
-                Status = Mimir.Api.Domain.FriendshipStatus.Accepted,
-                RespondedAt = DateTime.UtcNow,
-            });
-            autoAccepted++;
-        }
-    }
-    if (autoAccepted > 0)
-    {
-        db.SaveChanges();
-        bootLogger.LogInformation("Auto-Accepted friendship: {Count} çift (mevcut DM verisi)", autoAccepted);
-    }
+    // Sprint #14: Eski DM-pair seed kaldırıldı — AddConversations migration mevcut DM mesajlarını
+    // Conversation entity'sine taşıyor (DM = 2 ConversationMember). Friendship auto-accept iş bitti.
 
     // FCM eager-init — startup'ta yüklensin ki log "FCM ready" veya "disabled" net görünsün.
     sp.GetRequiredService<Mimir.Api.Services.Push.IPushDispatcher>();

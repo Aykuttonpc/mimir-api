@@ -40,12 +40,13 @@ public class FcmDispatcher : IPushDispatcher
         _logger.LogInformation("FCM dispatcher initialized: project={ProjectId}", app.Options.ProjectId);
     }
 
-    public Task SendNewMessageSignalAsync(Guid recipientUserId, Guid senderUserId, CancellationToken ct = default)
+    public Task SendNewMessageSignalAsync(Guid recipientUserId, Guid senderUserId, Guid conversationId, CancellationToken ct = default)
     {
         var data = new Dictionary<string, string>
         {
             ["type"] = "newMessage",
             ["senderUserId"] = senderUserId.ToString(),
+            ["conversationId"] = conversationId.ToString(),
             // senderUsername DB'den eklenecek SendInternalAsync içinde
         };
         return SendInternalAsync(recipientUserId, data, includeSenderUsername: true, senderForUsername: senderUserId, ct);
